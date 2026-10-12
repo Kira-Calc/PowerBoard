@@ -76,7 +76,13 @@ struct UsageChartCard: View {
             .labelsHidden()
             .fixedSize()
 
-            seriesToggles
+            // With a single series the total is the same line, so there is nothing to choose.
+
+            if availableSeries.count > 1 {
+
+                seriesToggles
+
+            }
 
             // Bars and the running total cross-fade; the incoming one grows from zero.
             ZStack {
@@ -138,7 +144,7 @@ struct UsageChartCard: View {
 
     /// Every series that can be shown: each agent, then this Mac when included.
     private var availableSeries: [Series] {
-        var result: [Series] = UsageSource.allCases.map { source in
+        var result: [Series] = context.model.usedSources.map { source in
             let value: (SeriesBucket) -> Double = metric == .energy
                 ? { $0.serverWhBySource[source] ?? 0 }
                 : { Double($0.tokensBySource[source]?.total ?? 0) }

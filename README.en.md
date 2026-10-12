@@ -6,7 +6,24 @@
 
 > **Beta (0.1.0).** Features and the estimation model may still change.
 
-PowerBoard is a macOS menu bar app that reads the local logs of Claude Code, Codex and Google Antigravity, counts tokens, and estimates how much electricity the providers' data centers used to answer them, with the carbon that produced it.
+PowerBoard is a macOS menu bar app and an **info panel for your AI coding tools**. It reads the local logs of Claude Code, Codex and Google Antigravity and brings what is scattered across them into one place:
+
+- **Usage:** tokens by tool, model, project and session, trends by hour, day and week, and day / week / month / year reports with exports.
+- **Sessions:** running conversations and their status; click one to bring its terminal to the front, and get notified when a task finishes.
+- **Energy and carbon:** estimated electricity and carbon in the providers' data centers, based on published energy factors, and whether the servers' grid is relatively clean right now.
+- **Terminal status line:** today's usage and energy at the bottom of Claude Code.
+
+PowerBoard shows only the tools you actually use: if you use only Claude Code, Codex and Antigravity do not appear.
+
+## Supported tools
+
+| Tool | Local data | Status |
+| --- | --- | --- |
+| Claude Code | `~/.claude/projects/**/*.jsonl` | Supported; matches ccusage within 0.035% |
+| Codex | `~/.codex/sessions/**/*.jsonl` | Supported |
+| Google Antigravity | SQLite under `~/.gemini/antigravity*` | Supported; not yet checked against real data |
+
+**More AI coding tools will be supported.** Tell us which one you use in Issues.
 
 All numbers are estimates with a wide range. See [docs/METHODOLOGY.md](docs/METHODOLOGY.md) for how they are calculated and what they leave out.
 

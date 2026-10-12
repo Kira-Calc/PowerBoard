@@ -54,13 +54,17 @@ struct DetailsPage: View {
                 }
                 .pickerStyle(.segmented)
                 .fixedSize()
-                Picker("details.tool", selection: $sourceFilter) {
-                    Text("details.tool.all").tag(SourceFilter.all)
-                    Text("source.claudeCode").tag(SourceFilter.claudeCode)
-                    Text("source.codex").tag(SourceFilter.codex)
-                    Text("source.antigravity").tag(SourceFilter.antigravity)
+                // Only tools in use; with a single tool there is nothing to filter.
+                let used = context.model.usedSources
+                if used.count > 1 {
+                    Picker("details.tool", selection: $sourceFilter) {
+                        Text("details.tool.all").tag(SourceFilter.all)
+                        if used.contains(.claudeCode) { Text("source.claudeCode").tag(SourceFilter.claudeCode) }
+                        if used.contains(.codex) { Text("source.codex").tag(SourceFilter.codex) }
+                        if used.contains(.antigravity) { Text("source.antigravity").tag(SourceFilter.antigravity) }
+                    }
+                    .fixedSize()
                 }
-                .fixedSize()
                 Spacer()
             }
             if !unmapped.isEmpty {

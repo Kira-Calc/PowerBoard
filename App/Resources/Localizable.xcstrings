@@ -5555,6 +5555,24 @@
         }
       }
     },
+    "sources.otherTools": {
+      "comment": "Toggle on the data sources page that lists tools with no usage yet.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show other tools"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示其他工具"
+          }
+        }
+      }
+    },
     "sources.paths": {
       "extractionState": "manual",
       "localizations": {

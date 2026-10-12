@@ -177,7 +177,7 @@ for side in [CGFloat(318), 690] {
     }
 }
 
-// Energy mark: a lightning bolt pressed into the face, in the app's orange.
+// Energy mark: a lightning bolt pressed into the face, in green, the color the app uses for cleaner energy.
 let bolt = CGMutablePath()
 bolt.move(to: CGPoint(x: 528, y: 432))
 bolt.addLine(to: CGPoint(x: 470, y: 520))
@@ -192,10 +192,10 @@ context.addPath(bolt)
 context.setFillColor(color(0x000000, 0.5))
 context.fillPath()
 context.restoreGState()
-linear([(0, color(0xFFC15A)), (0.5, color(0xF59A2C)), (1, color(0xE07614))],
+linear([(0, color(0x8EE07A)), (0.5, color(0x34C759)), (1, color(0x1F9E43))],
        from: CGPoint(x: 0, y: 432), to: CGPoint(x: 0, y: 584), in: bolt)
 context.addPath(bolt)
-context.setStrokeColor(color(0xFFE2A8, 0.7))
+context.setStrokeColor(color(0xD8F7CF, 0.7))
 context.setLineWidth(2)
 context.strokePath()
 

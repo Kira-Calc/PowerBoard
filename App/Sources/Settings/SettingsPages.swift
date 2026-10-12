@@ -91,12 +91,25 @@ enum Relauncher {
 struct SourcesSettingsPage: View {
     let context: DashboardContext
     @State private var confirmClear = false
+    @State private var showUnused = false
 
     var body: some View {
         @Bindable var settings = context.settings
         Form {
-            ForEach(UsageSource.allCases, id: \.self) { source in
+            ForEach(context.model.usedSources, id: \.self) { source in
                 sourceSection(source)
+            }
+            // Tools without records stay reachable here, so a log folder in a custom place can still be added.
+            let unused = UsageSource.allCases.filter { !context.model.usedSources.contains($0) }
+            if !unused.isEmpty {
+                Section {
+                    Toggle("sources.otherTools", isOn: $showUnused)
+                }
+                if showUnused {
+                    ForEach(unused, id: \.self) { source in
+                        sourceSection(source)
+                    }
+                }
             }
             Section {
                 HStack {

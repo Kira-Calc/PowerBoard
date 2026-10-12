@@ -26,6 +26,18 @@ final class AppModel {
     /// Incremented whenever stored data changes, so pages reload their queries.
     var dataVersion = 0
     var sourceStatuses: [UsageSource: SourceStatus] = [:]
+
+    /// Tools that have usage records. Lists in the UI show only these, so someone who uses one tool sees only that
+    /// tool. Until the first records are read, every tool is listed.
+    var usedSources: [UsageSource] {
+        let used = UsageSource.allCases.filter { (sourceStatuses[$0]?.stats.eventCount ?? 0) > 0 }
+        return used.isEmpty ? UsageSource.allCases : used
+    }
+
+    /// Providers behind the tools in use, in the same order.
+    var usedProviders: [GridProvider] {
+        usedSources.map(GridProvider.init(source:)).reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
+    }
     var isRecalculating = false
     /// True for a few seconds after today's token count went up. Drives the menu bar activity bar.
     var isIncreasing = false

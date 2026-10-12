@@ -15,7 +15,7 @@ struct GridOverviewCard: View {
                     .buttonStyle(.link)
             }
             Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
-                ForEach(GridProvider.allCases, id: \.self) { provider in
+                ForEach(context.model.usedProviders, id: \.self) { provider in
                     row(context.model.gridStatuses[provider] ?? .unknown(provider))
                 }
             }

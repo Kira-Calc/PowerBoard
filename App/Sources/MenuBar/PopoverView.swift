@@ -26,7 +26,7 @@ struct PopoverView: View {
                 CarbonSection(grams: today.co2G)
                 EquivalentSection(energyWh: today.energyWh.mid, items: settings.enabledEquivalents(from: model.equivalents))
                 Divider()
-                SourceSection(today: today, settings: settings)
+                SourceSection(today: today, settings: settings, sources: model.usedSources)
             } else {
                 EmptyState(model: model)
             }
@@ -221,6 +221,7 @@ private struct EquivalentSection: View {
 private struct SourceSection: View {
     let today: Snapshot.Today
     let settings: AppSettings
+    let sources: [UsageSource]
 
     private struct Row: Identifiable {
         var id: String
@@ -230,7 +231,7 @@ private struct SourceSection: View {
     }
 
     var body: some View {
-        let rows = UsageSource.allCases.map { source in
+        let rows = sources.map { source in
             Row(id: source.rawValue, name: SourceText.name(source), wh: today.energyWhMid(for: source), color: Palette.source(source))
         }
         VStack(alignment: .leading, spacing: 8) {

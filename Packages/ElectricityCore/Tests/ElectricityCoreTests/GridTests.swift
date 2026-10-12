@@ -120,6 +120,18 @@ private final class FakeTransport: HTTPTransport, @unchecked Sendable {
         #expect(transport.requests.filter { $0.url!.path == "/v3/signal-index" }.count == 5)
     }
 
+    @Test func wattTimeAccountRules() {
+        #expect(!WattTimeAccountRules.isValidPassword("b"))
+        #expect(!WattTimeAccountRules.isValidPassword("abcdefgh1"))
+        #expect(WattTimeAccountRules.isValidPassword("abcdef1!"))
+        #expect(WattTimeAccountRules.passes(.special, "a_b"))
+        #expect(!WattTimeAccountRules.passes(.special, "a b"))
+        #expect(WattTimeAccountRules.isPlausibleEmail("me@example.com"))
+        #expect(!WattTimeAccountRules.isPlausibleEmail("not-an-email"))
+        #expect(!WattTimeAccountRules.isPlausibleEmail("me@example"))
+        #expect(!WattTimeAccountRules.isPlausibleEmail("me@.com"))
+    }
+
     @Test func wattTimeErrors() async throws {
         let transport = FakeTransport(["/login": (401, "{}"), "/register": (400, #"{"message": "username taken"}"#)])
         let client = WattTimeClient(credentials: WattTimeCredentials(username: "u", password: "bad"), transport: transport)

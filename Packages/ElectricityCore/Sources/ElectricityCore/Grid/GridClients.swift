@@ -162,3 +162,35 @@ public struct ElectricityMapsClient: Sendable {
         return object
     }
 }
+
+/// WattTime's sign-up rules, checked before sending so problems show while typing.
+/// Password rule as returned by `POST /register`: at least 8 characters, with a letter, a number and a special character.
+public enum WattTimeAccountRules {
+    public enum PasswordRule: String, CaseIterable, Sendable {
+        case length, letter, number, special
+    }
+
+    public static func passes(_ rule: PasswordRule, _ password: String) -> Bool {
+        switch rule {
+        case .length: password.count >= 8
+        case .letter: password.contains { $0.isLetter }
+        case .number: password.contains { $0.isNumber }
+        case .special: password.contains { !$0.isLetter && !$0.isNumber && !$0.isWhitespace }
+        }
+    }
+
+    public static func isValidPassword(_ password: String) -> Bool {
+        PasswordRule.allCases.allSatisfy { passes($0, password) }
+    }
+
+    /// A light check (something@something.tld); WattTime does the real validation.
+    public static func isPlausibleEmail(_ email: String) -> Bool {
+        let parts = email.split(separator: "@", omittingEmptySubsequences: false)
+        guard parts.count == 2, !parts[0].isEmpty, !email.contains(" ") else { return false }
+        let domain = parts[1].split(separator: ".", omittingEmptySubsequences: false)
+        return domain.count >= 2 && domain.allSatisfy { !$0.isEmpty }
+    }
+
+    /// Organization is required by WattTime but means nothing for personal use, so it is filled in.
+    public static let defaultOrganization = "Personal (PowerBoard)"
+}

@@ -2180,6 +2180,23 @@
         }
       }
     },
+    "grid.error.emailTaken": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This email already has a WattTime account. Sign in with that account instead."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个邮箱已经注册过 WattTime 账号，请直接用那个账号登录。"
+          }
+        }
+      }
+    },
     "grid.error.network": {
       "extractionState": "manual",
       "localizations": {
@@ -2193,6 +2210,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "无法连接服务：%@"
+          }
+        }
+      }
+    },
+    "grid.error.passwordRules": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WattTime needs a password of at least 8 characters with a letter, a number and a special character."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WattTime 要求密码至少 8 位，并且包含字母、数字和特殊字符。"
           }
         }
       }
@@ -2220,13 +2254,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "WattTime did not accept the username or password."
+            "value": "WattTime did not accept this username or password. If you just created the account, open the link in the verification email first."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "WattTime 不接受这个用户名或密码。"
+            "value": "WattTime 不接受这个用户名或密码。如果刚注册，请先点开验证邮件中的链接。"
           }
         }
       }
@@ -2244,6 +2278,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "无法获取电网数据，显示的是上一次的数值。"
+          }
+        }
+      }
+    },
+    "grid.error.usernameTaken": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This username is already taken. Choose another one, or sign in if it is yours."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个用户名已被占用。请换一个；如果是你自己的账号，请直接登录。"
           }
         }
       }
@@ -2765,13 +2816,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Create and sign in"
+            "value": "Create account"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "创建并登录"
+            "value": "创建账号"
           }
         }
       }
@@ -2782,13 +2833,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A WattTime account is free; you can create one below. Passwords and keys are kept in the Keychain."
+            "value": "A WattTime account is free. Creating one takes a username, a password and an email address; WattTime then sends a verification email. Passwords and keys are kept in the Keychain."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "WattTime 账号免费，可以在下方创建。密码和密钥保存在钥匙串中。"
+            "value": "WattTime 账号免费。创建时只需要用户名、密码和邮箱，之后 WattTime 会发一封验证邮件。密码和密钥保存在钥匙串中。"
           }
         }
       }
@@ -2810,19 +2861,19 @@
         }
       }
     },
-    "grid.watttime.organization": {
+    "grid.watttime.emailInvalid": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Organization (can be your name)"
+            "value": "This email address does not look valid."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "组织（可以填你的名字）"
+            "value": "邮箱格式不正确。"
           }
         }
       }
@@ -2840,6 +2891,193 @@
           "stringUnit": {
             "state": "translated",
             "value": "密码"
+          }
+        }
+      }
+    },
+    "grid.watttime.pending.body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The account was created. WattTime sent a verification email to %@. Open the link in it; PowerBoard checks every 20 seconds and connects on its own once the account is verified."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "账号已创建。WattTime 已向 %@ 发送验证邮件，请点开邮件中的链接。PowerBoard 每 20 秒检查一次，验证完成后会自动连接，不需要再回来登录。"
+          }
+        }
+      }
+    },
+    "grid.watttime.pending.cancel": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消"
+          }
+        }
+      }
+    },
+    "grid.watttime.pending.check": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check now"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "立即检查"
+          }
+        }
+      }
+    },
+    "grid.watttime.pending.notYet": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not verified yet. If the email does not arrive within a few minutes, check the spam folder."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "账号还没有完成验证。如果几分钟内没有收到邮件，请查看垃圾邮件文件夹。"
+          }
+        }
+      }
+    },
+    "grid.watttime.pending.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check your email"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请查收验证邮件"
+          }
+        }
+      }
+    },
+    "grid.watttime.rule.length": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "8+ characters"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "至少 8 位"
+          }
+        }
+      }
+    },
+    "grid.watttime.rule.letter": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a letter"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "字母"
+          }
+        }
+      }
+    },
+    "grid.watttime.rule.met": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "met"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已满足"
+          }
+        }
+      }
+    },
+    "grid.watttime.rule.notMet": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not met"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未满足"
+          }
+        }
+      }
+    },
+    "grid.watttime.rule.number": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a number"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数字"
+          }
+        }
+      }
+    },
+    "grid.watttime.rule.special": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a special character"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "特殊字符"
           }
         }
       }

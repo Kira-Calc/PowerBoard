@@ -35,6 +35,10 @@ enum Icons {
     static let plus = Icon("plus")
     static let trash = Icon("trash")
     static let close = Icon("xmark")
+    static let mail = Icon("envelope")
+    static let warning = Icon("exclamationmark.triangle.fill")
+    static let checkmark = Icon("checkmark.circle.fill")
+    static let circle = Icon("circle")
     static let previous = Icon("chevron.left")
     static let next = Icon("chevron.right")
 }

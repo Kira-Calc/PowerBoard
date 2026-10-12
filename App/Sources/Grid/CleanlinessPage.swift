@@ -116,11 +116,17 @@ struct GridSourcesCard: View {
     @State private var username = ""
     @State private var password = ""
     @State private var email = ""
-    @State private var organization = ""
     @State private var creating = false
     @State private var emapsKey = ""
-    @State private var message: String?
+    @State private var notice: Notice?
     @State private var busy = false
+
+    /// A message shown at the top of the WattTime section, where it is seen right after pressing a button.
+    struct Notice: Equatable {
+        enum Kind { case error, info }
+        var kind: Kind
+        var text: String
+    }
 
     var body: some View {
         @Bindable var settings = grid.settings
@@ -128,35 +134,26 @@ struct GridSourcesCard: View {
             CardHeader(icon: Icons.leaf, color: Palette.clean, title: "grid.sources", tips: GridTips.sources)
             Form {
                 Section {
+                    if let notice {
+                        NoticeRow(notice: notice)
+                    } else if let error = model.gridError, settings.watttimeUsername != nil {
+                        NoticeRow(notice: Notice(kind: .error, text: Self.errorText(error)))
+                    }
                     if let user = settings.watttimeUsername {
                         LabeledContent("grid.watttime.signedIn") {
                             HStack {
                                 Text(verbatim: user)
                                 Button("grid.watttime.signOut") {
                                     settings.signOut()
+                                    notice = nil
                                     grid.reconfigure()
                                 }
                             }
                         }
+                    } else if let pending = settings.pendingUsername {
+                        pendingRows(username: pending, email: settings.pendingEmail ?? "")
                     } else {
-                        Picker("", selection: $creating) {
-                            Text("grid.watttime.signIn").tag(false)
-                            Text("grid.watttime.create").tag(true)
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                        TextField("grid.watttime.username", text: $username)
-                        SecureField("grid.watttime.password", text: $password)
-                        if creating {
-                            TextField("grid.watttime.email", text: $email)
-                            TextField("grid.watttime.organization", text: $organization)
-                        }
-                        HStack {
-                            Spacer()
-                            if busy { ProgressView().controlSize(.small) }
-                            Button(creating ? "grid.watttime.createButton" : "grid.watttime.signInButton") { submit() }
-                                .disabled(busy || username.isEmpty || password.isEmpty || (creating && (email.isEmpty || organization.isEmpty)))
-                        }
+                        accountForm
                     }
                 } header: {
                     Text(verbatim: "WattTime")
@@ -199,43 +196,182 @@ struct GridSourcesCard: View {
                 .onChange(of: settings.lessCleanAbove) { grid.reconfigure() }
             }
             .formStyle(.grouped)
-            if let message {
-                Text(message).font(.caption).foregroundStyle(.orange).textSelection(.enabled)
-            } else if let error = model.gridError, settings.watttimeUsername != nil {
-                Text(errorText(error)).font(.caption).foregroundStyle(.orange)
+        }
+    }
+
+    // MARK: Sign in or create
+
+    @ViewBuilder
+    private var accountForm: some View {
+        Picker("", selection: $creating) {
+            Text("grid.watttime.signIn").tag(false)
+            Text("grid.watttime.create").tag(true)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .onChange(of: creating) { notice = nil }
+        TextField("grid.watttime.username", text: $username)
+        SecureField("grid.watttime.password", text: $password)
+        if creating {
+            PasswordRulesRow(password: password)
+            TextField("grid.watttime.email", text: $email)
+            if !email.isEmpty && !WattTimeAccountRules.isPlausibleEmail(email) {
+                Text("grid.watttime.emailInvalid").font(.caption).foregroundStyle(.orange)
             }
+        }
+        HStack {
+            Spacer()
+            if busy { ProgressView().controlSize(.small) }
+            Button(creating ? "grid.watttime.createButton" : "grid.watttime.signInButton") { submit() }
+                .keyboardShortcut(.defaultAction)
+                .disabled(!canSubmit)
+        }
+    }
+
+    private var canSubmit: Bool {
+        guard !busy, !username.trimmingCharacters(in: .whitespaces).isEmpty, !password.isEmpty else { return false }
+        return !creating || (WattTimeAccountRules.isValidPassword(password) && WattTimeAccountRules.isPlausibleEmail(email))
+    }
+
+    // MARK: Waiting for email verification
+
+    @ViewBuilder
+    private func pendingRows(username: String, email: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            SymbolIcon(Icons.mail, size: 16).foregroundStyle(.blue)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("grid.watttime.pending.title").font(.headline)
+                Text(String(format: String(localized: "grid.watttime.pending.body"), email))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        LabeledContent("grid.watttime.username") { Text(verbatim: username) }
+        HStack {
+            Button("grid.watttime.pending.cancel", role: .destructive) {
+                grid.settings.cancelPending()
+                grid.startVerificationPolling()
+                notice = nil
+            }
+            Spacer()
+            if busy { ProgressView().controlSize(.small) }
+            Button("grid.watttime.pending.check") {
+                busy = true
+                notice = nil
+                Task {
+                    if await !grid.checkPendingNow() {
+                        notice = Notice(kind: .info, text: String(localized: "grid.watttime.pending.notYet"))
+                    }
+                    busy = false
+                }
+            }
+            .disabled(busy)
         }
     }
 
     private func submit() {
         busy = true
-        message = nil
+        notice = nil
         let creating = self.creating
-        let (username, password, email, organization) = (self.username, self.password, self.email, self.organization)
+        let username = self.username.trimmingCharacters(in: .whitespaces)
+        let (password, email) = (self.password, self.email.trimmingCharacters(in: .whitespaces))
         Task {
+            defer { busy = false }
             do {
                 if creating {
-                    try await WattTimeClient.register(username: username, password: password, email: email, organization: organization)
+                    try await WattTimeClient.register(username: username, password: password, email: email,
+                                                      organization: WattTimeAccountRules.defaultOrganization)
+                    // WattTime sends a verification email and refuses sign-in until the link is opened.
+                    // Try once in case the account is usable at once; otherwise wait for verification.
+                    if (try? await WattTimeClient(credentials: WattTimeCredentials(username: username, password: password)).login()) != nil {
+                        try grid.settings.signIn(username: username, password: password)
+                    } else {
+                        try grid.settings.savePending(username: username, password: password, email: email)
+                        grid.startVerificationPolling()
+                    }
+                } else {
+                    // Check the credentials before saving them.
+                    _ = try await WattTimeClient(credentials: WattTimeCredentials(username: username, password: password)).login()
+                    try grid.settings.signIn(username: username, password: password)
                 }
-                // Check the credentials before saving them.
-                _ = try await WattTimeClient(credentials: WattTimeCredentials(username: username, password: password)).login()
-                try grid.settings.signIn(username: username, password: password)
                 self.password = ""
                 grid.reconfigure()
             } catch let error as GridAPIError {
-                message = errorText(error)
+                notice = Notice(kind: .error, text: creating ? Self.registerErrorText(error) : Self.errorText(error))
             } catch {
-                message = String(format: String(localized: "grid.error.network"), error.localizedDescription)
+                notice = Notice(kind: .error, text: String(format: String(localized: "grid.error.network"), error.localizedDescription))
             }
-            busy = false
         }
     }
 
-    private func errorText(_ error: GridAPIError) -> String {
+    /// Turns WattTime's English sign-up errors into the app's language; unknown ones are shown as sent.
+    static func registerErrorText(_ error: GridAPIError) -> String {
+        guard case .http(_, let text?) = error else { return errorText(error) }
+        let lower = text.lowercased()
+        if lower.contains("password must") { return String(localized: "grid.error.passwordRules") }
+        if lower.contains("email is invalid") { return String(localized: "grid.watttime.emailInvalid") }
+        if lower.contains("username") && (lower.contains("taken") || lower.contains("exist") || lower.contains("already")) {
+            return String(localized: "grid.error.usernameTaken")
+        }
+        if lower.contains("email") && (lower.contains("exist") || lower.contains("already") || lower.contains("use")) {
+            return String(localized: "grid.error.emailTaken")
+        }
+        return String(format: String(localized: "grid.error.service"), text)
+    }
+
+    static func errorText(_ error: GridAPIError) -> String {
         switch error {
         case .unauthorized: String(localized: "grid.error.unauthorized")
         case .http(_, let text?): String(format: String(localized: "grid.error.service"), text)
         default: String(localized: "grid.error.unavailable")
+        }
+    }
+}
+
+/// A message at the top of a form section: orange with a warning sign for errors, blue for information.
+private struct NoticeRow: View {
+    let notice: GridSourcesCard.Notice
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            SymbolIcon(notice.kind == .error ? Icons.warning : Icons.info, size: 14)
+                .foregroundStyle(notice.kind == .error ? Color.orange : Color.blue)
+            Text(verbatim: notice.text)
+                .foregroundStyle(notice.kind == .error ? Color.orange : Color.primary)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// WattTime's password rules, ticked off while typing.
+private struct PasswordRulesRow: View {
+    let password: String
+
+    var body: some View {
+        HStack(spacing: 14) {
+            ForEach(WattTimeAccountRules.PasswordRule.allCases, id: \.self) { rule in
+                let ok = WattTimeAccountRules.passes(rule, password)
+                HStack(spacing: 4) {
+                    SymbolIcon(ok ? Icons.checkmark : Icons.circle, size: 11)
+                        .foregroundStyle(ok ? Palette.clean : Color.secondary)
+                    Text(Self.label(rule))
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityValue(Text(ok ? "grid.watttime.rule.met" : "grid.watttime.rule.notMet"))
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+
+    static func label(_ rule: WattTimeAccountRules.PasswordRule) -> LocalizedStringKey {
+        switch rule {
+        case .length: "grid.watttime.rule.length"
+        case .letter: "grid.watttime.rule.letter"
+        case .number: "grid.watttime.rule.number"
+        case .special: "grid.watttime.rule.special"
         }
     }
 }

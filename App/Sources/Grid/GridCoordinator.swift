@@ -13,6 +13,9 @@ final class GridSettings {
         static let regions = "grid.watttime.regions"
         /// Whether an Electricity Maps key is in the Keychain, so launch does not have to read the Keychain.
         static let hasEmapsKey = "grid.emaps.present"
+        /// An account that was created but whose email is not verified yet, so WattTime does not accept it.
+        static let pendingUsername = "grid.watttime.pending"
+        static let pendingEmail = "grid.watttime.pendingEmail"
     }
     static let watttimePasswordAccount = "watttime.password"
     static let electricityMapsAccount = "electricitymaps.key"
@@ -20,6 +23,8 @@ final class GridSettings {
     @ObservationIgnored private let defaults: UserDefaults
     private(set) var watttimeUsername: String?
     private(set) var hasElectricityMapsKey: Bool
+    private(set) var pendingUsername: String?
+    private(set) var pendingEmail: String?
     var cleanerBelow: Double { didSet { defaults.set(cleanerBelow, forKey: Key.cleanerBelow) } }
     var lessCleanAbove: Double { didSet { defaults.set(lessCleanAbove, forKey: Key.lessCleanAbove) } }
 
@@ -27,6 +32,15 @@ final class GridSettings {
         self.defaults = defaults
         watttimeUsername = defaults.string(forKey: Key.username)
         hasElectricityMapsKey = defaults.bool(forKey: Key.hasEmapsKey)
+        pendingUsername = defaults.string(forKey: Key.pendingUsername)
+        pendingEmail = defaults.string(forKey: Key.pendingEmail)
+        #if DEBUG
+        // Development aid: `-previewSignedOut` or `-previewPending` shows those states for this launch only,
+        // without changing saved settings.
+        let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("-previewSignedOut") || arguments.contains("-previewPending") { watttimeUsername = nil }
+        if arguments.contains("-previewPending") { (pendingUsername, pendingEmail) = ("preview", "you@example.com") }
+        #endif
         cleanerBelow = defaults.object(forKey: Key.cleanerBelow) as? Double ?? 100.0 / 3
         lessCleanAbove = defaults.object(forKey: Key.lessCleanAbove) as? Double ?? 200.0 / 3
     }
@@ -63,6 +77,42 @@ final class GridSettings {
         watttimeUsername = username
     }
 
+    /// Keeps a new account until its email is verified; the password waits in the Keychain.
+    func savePending(username: String, password: String, email: String) throws {
+        try Keychain.set(password, account: Self.watttimePasswordAccount)
+        defaults.set(username, forKey: Key.pendingUsername)
+        defaults.set(email, forKey: Key.pendingEmail)
+        pendingUsername = username
+        pendingEmail = email
+    }
+
+    /// Credentials of the account waiting for verification, read off the main thread.
+    func loadPendingCredentials() async -> WattTimeCredentials? {
+        guard let username = pendingUsername else { return nil }
+        let account = Self.watttimePasswordAccount
+        let password = await Task.detached { Keychain.get(account: account) }.value
+        return password.map { WattTimeCredentials(username: username, password: $0) }
+    }
+
+    func completePending() {
+        guard let username = pendingUsername else { return }
+        defaults.set(username, forKey: Key.username)
+        watttimeUsername = username
+        clearPending()
+    }
+
+    func cancelPending() {
+        Keychain.delete(account: Self.watttimePasswordAccount)
+        clearPending()
+    }
+
+    private func clearPending() {
+        defaults.removeObject(forKey: Key.pendingUsername)
+        defaults.removeObject(forKey: Key.pendingEmail)
+        pendingUsername = nil
+        pendingEmail = nil
+    }
+
     func signOut() {
         Keychain.delete(account: Self.watttimePasswordAccount)
         defaults.removeObject(forKey: Key.username)
@@ -94,6 +144,9 @@ final class GridCoordinator {
     private let ingest: IngestCoordinator
     private var service: GridService?
     private var task: Task<Void, Never>?
+    private var verificationTask: Task<Void, Never>?
+    /// Seconds between sign-in attempts while waiting for the user to verify their email.
+    static let verificationInterval: Duration = .seconds(20)
 
     init(model: AppModel, ingest: IngestCoordinator) {
         self.model = model
@@ -103,6 +156,7 @@ final class GridCoordinator {
     func start() {
         guard let table = try? GridRegionTable.bundled() else { return }
         model.gridConfigured = settings.isConfigured
+        startVerificationPolling()
         task = Task { [weak self] in
             guard let self else { return }
             let configuration = await settings.loadConfiguration()
@@ -119,6 +173,34 @@ final class GridCoordinator {
 
     func stop() {
         task?.cancel()
+        verificationTask?.cancel()
+    }
+
+    /// While a new account waits for email verification, tries to sign in every 20 seconds for up to an hour,
+    /// and connects as soon as WattTime accepts it, so the user does not have to come back and sign in.
+    func startVerificationPolling() {
+        verificationTask?.cancel()
+        guard settings.pendingUsername != nil else { return }
+        verificationTask = Task { [weak self] in
+            let deadline = Date().addingTimeInterval(3600)
+            while !Task.isCancelled, Date() < deadline {
+                try? await Task.sleep(for: Self.verificationInterval)
+                guard let self, !Task.isCancelled else { return }
+                if await self.checkPendingNow() { return }
+            }
+        }
+    }
+
+    /// One sign-in attempt for the account waiting for verification. Returns true when it is now connected.
+    @discardableResult
+    func checkPendingNow() async -> Bool {
+        guard let credentials = await settings.loadPendingCredentials() else { return false }
+        guard (try? await WattTimeClient(credentials: credentials).login()) != nil,
+              settings.pendingUsername == credentials.username else { return false }
+        settings.completePending()
+        verificationTask?.cancel()
+        reconfigure()
+        return true
     }
 
     /// Applies changed accounts, keys or thresholds and refreshes now.

@@ -198,6 +198,15 @@ struct ReportUsageChart: View {
         var x: Date
         var value: Double
         var tool: String
+        /// End of the bucket, for bars.
+        var end: Date = .distantPast
+        /// Bottom of this tool's segment in a stacked bar.
+        var base: Double = 0
+
+        var top: Double { base + value }
+        /// The bucket narrowed a little on each side, so neighboring bars have a gap.
+        var barStart: Date { x.addingTimeInterval(end.timeIntervalSince(x) * 0.12) }
+        var barEnd: Date { end.addingTimeInterval(-end.timeIntervalSince(x) * 0.12) }
     }
 
     private func value(_ bucket: SeriesBucket, _ source: UsageSource) -> Double {
@@ -219,15 +228,23 @@ struct ReportUsageChart: View {
     }
 
     private var barChart: some View {
+        // Stacked by tool, with each segment's bottom and top computed here, because a bar given its own time span
+        // is not stacked by Swift Charts.
         let points = report.trend.flatMap { bucket in
-            sources.compactMap { source -> Point? in
+            var base = 0.0
+            return sources.compactMap { source -> Point? in
                 let v = value(bucket, source)
-                return v > 0 ? Point(id: "\(source.rawValue)-\(bucket.start.timeIntervalSince1970)", x: bucket.start, value: v,
-                                     tool: strings.sourceName(source)) : nil
+                guard v > 0 else { return nil }
+                defer { base += v }
+                return Point(id: "\(source.rawValue)-\(bucket.start.timeIntervalSince1970)", x: bucket.start, value: v,
+                             tool: strings.sourceName(source), end: bucket.end, base: base)
             }
         }
+        // Each bar spans its own bucket. Binning by calendar unit would draw the short first and last buckets of a
+        // rolling period as whole hours or days, past the edges of the chart.
         return Chart(points) { point in
-            BarMark(x: .value("Time", point.x, unit: unit), y: .value("Value", point.value))
+            RectangleMark(xStart: .value("Start", point.barStart), xEnd: .value("End", point.barEnd),
+                    yStart: .value("Bottom", point.base), yEnd: .value("Top", point.top))
                 .foregroundStyle(by: .value("Tool", point.tool))
                 .cornerRadius(1.5)
         }
@@ -273,8 +290,10 @@ struct ReportUsageChart: View {
                 AxisMarks(values: axisValues) { value in
                     AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 3]))
                     // A label at the very end of the period would be cut off at the edge.
-                    if let date = value.as(Date.self), report.interval.end.timeIntervalSince(date) > report.interval.duration * 0.06 {
-                        AxisValueLabel(format: axisFormat)
+                    if let date = value.as(Date.self), report.interval.end.timeIntervalSince(date) > report.interval.duration * 0.06,
+                       date.timeIntervalSince(report.interval.start) > report.interval.duration * 0.03 {
+                        // Centered under its grid line.
+                        AxisValueLabel(format: axisFormat, anchor: .top)
                     }
                 }
             }
@@ -284,14 +303,6 @@ struct ReportUsageChart: View {
     private func label(_ number: Double) -> String {
         if number == 0 { return "0" }
         return metric == .energy ? ValueFormatting.energy(wh: number).text : ValueFormatting.tokens(Int(number))
-    }
-
-    private var unit: Calendar.Component {
-        switch report.period {
-        case .day: .hour
-        case .week, .month: .day
-        case .year: .month
-        }
     }
 
     private var axisValues: AxisMarkValues {

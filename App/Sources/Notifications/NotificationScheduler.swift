@@ -53,17 +53,21 @@ final class NotificationScheduler {
             defaults.set(dayKey, forKey: Key.lastThreshold)
             send(
                 title: String(localized: "notification.threshold.title"),
-                body: String(format: String(localized: "notification.threshold.body"),
+                body: String(format: settings.dayText("notification.threshold.body"),
                              settings.formatEnergy(settings.thresholdWh).text, settings.formatEnergy(today.energyWh.mid).text)
             )
         }
 
         if settings.dailyReportEnabled, reportDue, defaults.string(forKey: Key.lastDaily) != dayKey {
             defaults.set(dayKey, forKey: Key.lastDaily)
+            // The daily summary is always the calendar day, whatever the "today" figures cover.
+            let day = DayWindow.calendarDay.interval(now: now, calendar: calendar)
+            let totals = (try? model.store?.totals(from: day.start, to: day.end)) ?? nil
             send(
                 title: String(localized: "notification.daily.title"),
                 body: String(format: String(localized: "notification.daily.body"),
-                             settings.formatEnergy(today.energyWh.mid).text, ValueFormatting.carbon(grams: today.co2G).text, Units.co2e)
+                             settings.formatEnergy(totals?.energyWh.mid ?? today.energyWh.mid).text,
+                             ValueFormatting.carbon(grams: totals?.co2GramsMid ?? today.co2G).text, Units.co2e)
             )
         }
 

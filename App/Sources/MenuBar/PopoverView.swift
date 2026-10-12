@@ -28,7 +28,7 @@ struct PopoverView: View {
                 Divider()
                 SourceSection(today: today, settings: settings, sources: model.usedSources)
             } else {
-                EmptyState(model: model)
+                EmptyState(model: model, settings: settings)
             }
             if let progress = model.scanProgress, model.isBackfilling {
                 Text(String(format: String(localized: "popover.backfill"), progress.filesDone, progress.filesTotal))
@@ -80,7 +80,7 @@ private struct EnergySection: View {
         let range = settings.formatEnergy(energy.total)
         VStack(alignment: .leading, spacing: 4) {
             SectionHeader(icon: Icons.lightning, color: Palette.energy,
-                          title: energy.includesLocal ? "popover.today.energyWithLocal" : "popover.today.energy",
+                          title: LocalizedStringKey(settings.dayKey(energy.includesLocal ? "popover.today.energyWithLocal" : "popover.today.energy")),
                           serverTag: !energy.includesLocal)
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("popover.about")
@@ -267,11 +267,12 @@ private struct SourceSection: View {
 
 private struct EmptyState: View {
     let model: AppModel
+    let settings: AppSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            SectionHeader(icon: Icons.lightning, color: Palette.energy, title: "popover.today.energy")
-            Text(model.isBackfilling ? "popover.loading" : "empty.today")
+            SectionHeader(icon: Icons.lightning, color: Palette.energy, title: LocalizedStringKey(settings.dayKey("popover.today.energy")))
+            Text(model.isBackfilling ? "popover.loading" : LocalizedStringKey(settings.dayKey("empty.today")))
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

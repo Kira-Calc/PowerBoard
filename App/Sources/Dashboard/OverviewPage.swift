@@ -37,14 +37,14 @@ struct OverviewPage: View {
                 recentSessions
             } else {
                 Card {
-                    CardHeader(icon: Icons.lightning, color: Palette.energy, title: "popover.today.energy")
-                    Text(context.model.isBackfilling ? "popover.loading" : "empty.today")
+                    CardHeader(icon: Icons.lightning, color: Palette.energy, title: LocalizedStringKey(context.settings.dayKey("popover.today.energy")))
+                    Text(context.model.isBackfilling ? "popover.loading" : LocalizedStringKey(context.settings.dayKey("empty.today")))
                         .foregroundStyle(.secondary)
                 }
             }
         }
-        .storeQuery(context.model, id: AnyHashable(context.model.snapshot?.generatedAt)) { store in
-            let day = LocalPeriod.day.interval(containing: Date())
+        .storeQuery(context.model, id: AnyHashable(context.model.snapshot?.generatedAt)) { [window = context.settings.dayWindow] store in
+            let day = window.interval(now: Date())
             return (try store.sessions(activeSince: Date().addingTimeInterval(-24 * 3600), limit: 8),
                     try store.energyByGridLevel(from: day.start, to: day.end))
         } assign: { recent, levels in
@@ -68,7 +68,7 @@ struct OverviewPage: View {
         let range = settings.formatEnergy(energy.total)
         return Card {
             CardHeader(icon: Icons.lightning, color: Palette.energy,
-                       title: energy.includesLocal ? "popover.today.energyWithLocal" : "popover.today.energy",
+                       title: LocalizedStringKey(context.settings.dayKey(energy.includesLocal ? "popover.today.energyWithLocal" : "popover.today.energy")),
                        info: .energy, context: context, serverTag: !energy.includesLocal)
             bigValue(range.mid.text)
             RollingText(String(format: String(localized: "popover.energy.range"), range.low.text, range.high.text))

@@ -54,3 +54,31 @@ import Testing
         #expect(!LegacyMigration.run(applicationSupport: root, legacyDomain: old, domain: new, includeKeychain: false).copiedPreferences)
     }
 }
+
+@Suite struct DayWindowTests {
+    @Test func last24HoursDoesNotResetAtMidnight() throws {
+        let store = try UsageStore()
+        let calc = try TestSupport.calculator()
+        func row(_ key: String, _ date: Date) throws -> UsageEventRow {
+            let usage = ParsedUsage(dedupeKey: key, source: .claudeCode, sessionID: "s", projectPath: nil, model: "claude-sonnet-test",
+                                    timestamp: date, tokens: TokenCounts(inputUncached: 0, output: 1_000_000))
+            return UsageEventRow(usage: usage, result: try calc.estimate(model: usage.model, tokens: usage.tokens))
+        }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let midnight = try Date("2026-10-13T00:00:00Z", strategy: .iso8601)
+        try store.insert([row("a", midnight.addingTimeInterval(-3600)), row("b", midnight.addingTimeInterval(600))], cursor: nil)
+        let now = midnight.addingTimeInterval(1200)
+
+        let calendarDay = try SnapshotBuilder.build(store: store, now: now, calendar: calendar)
+        let rolling = try SnapshotBuilder.build(store: store, now: now, calendar: calendar, dayWindow: .last24Hours)
+        #expect(rolling.today.energyWh.mid > calendarDay.today.energyWh.mid * 1.99)
+        #expect(rolling.today.window == .last24Hours)
+        let line = StatusLineFormatter.render(snapshot: rolling, sessionID: nil, language: .en, format: .default, color: false, now: now)
+        #expect(line.contains("24h"))
+
+        let hours = ChartScale.hour.boundaries(now: now, calendar: calendar, dayWindow: .last24Hours)
+        #expect(hours.count == 25)
+        #expect(hours.last == midnight.addingTimeInterval(3600))
+    }
+}

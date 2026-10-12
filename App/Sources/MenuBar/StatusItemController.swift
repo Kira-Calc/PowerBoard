@@ -132,18 +132,18 @@ final class StatusItemController: NSObject {
         case .energy where model.gridConfigured && model.mainGridStatus != nil:
             let energy = settings.displayedEnergy(today)
             let range = settings.formatEnergy(energy.server)
-            return String(format: String(localized: "statusItem.energy.tooltip"), range.mid.text, range.low.text, range.high.text)
+            return String(format: settings.dayText("statusItem.energy.tooltip"), range.mid.text, range.low.text, range.high.text)
                 + "\n" + GridText.summary(model.mainGridStatus!)
         case .energy:
             let energy = settings.displayedEnergy(today)
             let range = settings.formatEnergy(energy.server)
-            let server = String(format: String(localized: "statusItem.energy.tooltip"), range.mid.text, range.low.text, range.high.text)
+            let server = String(format: settings.dayText("statusItem.energy.tooltip"), range.mid.text, range.low.text, range.high.text)
             guard let local = energy.local else { return server }
-            return server + "\n" + String(format: String(localized: "statusItem.local.tooltip"), settings.formatEnergy(local).text)
+            return server + "\n" + String(format: settings.dayText("statusItem.local.tooltip"), settings.formatEnergy(local).text)
         case .tokens:
-            return String(format: String(localized: "statusItem.tokens.tooltip"), ValueFormatting.tokens(today.tokens.total))
+            return String(format: settings.dayText("statusItem.tokens.tooltip"), ValueFormatting.tokens(today.tokens.total))
         case .carbon:
-            return String(format: String(localized: "statusItem.carbon.tooltip"), ValueFormatting.carbon(grams: today.co2G).text, Units.co2e)
+            return String(format: settings.dayText("statusItem.carbon.tooltip"), ValueFormatting.carbon(grams: today.co2G).text, Units.co2e)
         }
     }
 

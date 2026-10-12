@@ -9,6 +9,7 @@ public actor SnapshotPublisher {
     private let calendar: @Sendable () -> Calendar
 
     private var includeLocalEnergy = false
+    private var dayWindow: DayWindow = .calendarDay
     private var grid: [GridProvider: GridStatus] = [:]
     private var lastWrite: Date?
     private var latest: Snapshot?
@@ -25,6 +26,10 @@ public actor SnapshotPublisher {
         includeLocalEnergy = include
     }
 
+    public func setDayWindow(_ window: DayWindow) {
+        dayWindow = window
+    }
+
     public func setGrid(_ statuses: [GridProvider: GridStatus]) {
         grid = statuses
     }
@@ -32,7 +37,8 @@ public actor SnapshotPublisher {
     /// Rebuilds the snapshot, writes it (now or after the throttle interval) and returns it.
     @discardableResult
     public func refresh(now: Date = Date()) throws -> Snapshot {
-        let snapshot = try SnapshotBuilder.build(store: store, now: now, calendar: calendar(), includeLocalEnergy: includeLocalEnergy, grid: grid)
+        let snapshot = try SnapshotBuilder.build(store: store, now: now, calendar: calendar(), includeLocalEnergy: includeLocalEnergy, grid: grid,
+                                                  dayWindow: dayWindow)
         latest = snapshot
         if let lastWrite, now.timeIntervalSince(lastWrite) < minInterval {
             if trailingWrite == nil {

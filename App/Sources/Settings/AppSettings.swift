@@ -111,6 +111,7 @@ final class AppSettings {
         static let cacheReadRatio = "energy.cacheReadRatio"
         static let gridGramsPerKWh = "grid.gramsPerKWh"
         static let includeLocalEnergy = "energy.includeLocal"
+        static let dayWindow = "general.dayWindow"
         static let disabledEquivalents = "equivalents.disabled"
         static func customPaths(_ source: UsageSource) -> String { "sources.customPaths.\(source.rawValue)" }
         static let retention = "data.retention"
@@ -188,6 +189,20 @@ final class AppSettings {
     }
 
     /// Measure this Mac's own power use and add it to displayed energy (off by default).
+    /// What the "today" figures cover: the calendar day, or the last 24 hours so they do not reset at midnight.
+    var dayWindow: DayWindow = .calendarDay {
+        didSet { defaults.set(dayWindow.rawValue, forKey: Key.dayWindow) }
+    }
+
+    /// A string key for the current day window: keys that say "today" have a ".24h" variant.
+    func dayKey(_ key: String) -> String {
+        dayWindow == .last24Hours ? key + ".24h" : key
+    }
+
+    func dayText(_ key: String) -> String {
+        Bundle.main.localizedString(forKey: dayKey(key), value: nil, table: nil)
+    }
+
     var includeLocalEnergy: Bool {
         didSet { defaults.set(includeLocalEnergy, forKey: Key.includeLocalEnergy) }
     }
@@ -258,6 +273,7 @@ final class AppSettings {
         }
         self.contents = contents
 
+        dayWindow = defaults.string(forKey: Key.dayWindow).flatMap(DayWindow.init) ?? .calendarDay
         let language = defaults.string(forKey: Key.appLanguage).flatMap(AppLanguage.init) ?? .system
         appLanguage = language
         appLanguageAtLaunch = language

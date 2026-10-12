@@ -22,8 +22,8 @@ struct CleanlinessPage: View {
             todayByLevel
             GridSourcesCard(grid: context.grid, model: context.model)
         }
-        .storeQuery(context.model, id: AnyHashable(context.model.snapshot?.generatedAt)) { store in
-            let day = LocalPeriod.day.interval(containing: Date())
+        .storeQuery(context.model, id: AnyHashable(context.model.snapshot?.generatedAt)) { [window = context.settings.dayWindow] store in
+            let day = window.interval(now: Date())
             return try store.energyByGridLevel(from: day.start, to: day.end)
         } assign: { byLevel = $0 }
     }
@@ -112,9 +112,9 @@ struct CleanlinessPage: View {
 
     private var todayByLevel: some View {
         Card {
-            CardHeader(icon: Icons.lightning, color: Palette.energy, title: "grid.today", tips: GridTips.today)
+            CardHeader(icon: Icons.lightning, color: Palette.energy, title: LocalizedStringKey(context.settings.dayKey("grid.today")), tips: GridTips.today)
             if byLevel.isEmpty {
-                Text("empty.today").foregroundStyle(.secondary)
+                Text(LocalizedStringKey(context.settings.dayKey("empty.today"))).foregroundStyle(.secondary)
             } else {
                 GridLevelBar(byLevel: byLevel, settings: context.settings)
             }

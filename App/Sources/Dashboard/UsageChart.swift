@@ -100,9 +100,10 @@ struct UsageChartCard: View {
         .onChange(of: metric) { grow() }
         .onChange(of: selectionRaw) { grow() }
         .onChange(of: scaleRaw) { growOnNextLoad = true }
-        .storeQuery(context.model, id: [AnyHashable(scaleRaw), AnyHashable(includeLocal), AnyHashable(context.model.snapshot?.generatedAt)]) {
-            [scale, includeLocal] store in
-            try store.series(boundaries: scale.boundaries(now: Date()), includeLocal: includeLocal)
+        .storeQuery(context.model, id: [AnyHashable(scaleRaw), AnyHashable(includeLocal), AnyHashable(context.settings.dayWindow),
+                                        AnyHashable(context.model.snapshot?.generatedAt)]) {
+            [scale, includeLocal, window = context.settings.dayWindow] store in
+            try store.series(boundaries: scale.boundaries(now: Date(), dayWindow: window), includeLocal: includeLocal)
         } assign: { result in
             if growOnNextLoad {
                 growOnNextLoad = false
@@ -134,7 +135,7 @@ struct UsageChartCard: View {
 
     private var titleKey: LocalizedStringKey {
         switch scale {
-        case .hour: "chart.title.hour"
+        case .hour: LocalizedStringKey(context.settings.dayKey("chart.title.hour"))
         case .day: "chart.title.day"
         case .week: "chart.title.week"
         }

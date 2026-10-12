@@ -409,6 +409,23 @@
         }
       }
     },
+    "chart.title.hour.24h": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last 24 hours"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "过去 24 小时"
+          }
+        }
+      }
+    },
     "chart.title.week": {
       "extractionState": "manual",
       "localizations": {
@@ -814,6 +831,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "今天还没有用量。运行 Claude Code 或 Codex 后，这里会显示数据。"
+          }
+        }
+      }
+    },
+    "empty.today.24h": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No usage in the last 24 hours. Data appears here after you run Claude Code or Codex."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "过去 24 小时没有用量。运行 Claude Code 或 Codex 后，这里会显示数据。"
           }
         }
       }
@@ -1891,6 +1925,74 @@
         }
       }
     },
+    "general.dayWindow": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Today's figures"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今日统计范围"
+          }
+        }
+      }
+    },
+    "general.dayWindow.calendar": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calendar day"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自然日"
+          }
+        }
+      }
+    },
+    "general.dayWindow.last24h": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last 24 hours"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "过去 24 小时"
+          }
+        }
+      }
+    },
+    "general.dayWindow.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calendar day starts again at midnight. Last 24 hours always covers the 24 hours up to now, so the menu bar, popover, overview and terminal status line do not drop to zero at midnight. The daily summary notification and the Day report still use the calendar day."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自然日在每天 0 点重新开始计算。过去 24 小时始终统计截至此刻的 24 小时，所以菜单栏、弹出面板、实时概览和终端状态栏不会在 0 点归零。每日汇总通知和报告页的“日”仍按自然日计算。"
+          }
+        }
+      }
+    },
     "general.language.restart": {
       "extractionState": "manual",
       "localizations": {
@@ -2857,6 +2959,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "今日用电按电网等级"
+          }
+        }
+      }
+    },
+    "grid.today.24h": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Energy in the last 24 hours by grid level"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "过去 24 小时用电按电网等级"
           }
         }
       }
@@ -4070,6 +4189,23 @@
         }
       }
     },
+    "notification.threshold.body.24h": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inference energy in the last 24 hours passed %1$@. Now about %2$@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "过去 24 小时推理耗电已超过 %1$@，目前约 %2$@。"
+          }
+        }
+      }
+    },
     "notification.threshold.title": {
       "extractionState": "manual",
       "localizations": {
@@ -4586,6 +4722,23 @@
         }
       }
     },
+    "popover.today.energy.24h": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI inference energy, last 24 hours"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "过去 24 小时 AI 推理耗电"
+          }
+        }
+      }
+    },
     "popover.today.energyWithLocal": {
       "extractionState": "manual",
       "localizations": {
@@ -4599,6 +4752,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "今日耗电"
+          }
+        }
+      }
+    },
+    "popover.today.energyWithLocal.24h": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Energy, last 24 hours"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "过去 24 小时耗电"
           }
         }
       }
@@ -6219,6 +6389,23 @@
         }
       }
     },
+    "statusItem.carbon.tooltip.24h": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inference carbon, last 24 hours: about %1$@ %2$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "过去 24 小时推理碳排：约 %1$@ %2$@"
+          }
+        }
+      }
+    },
     "statusItem.energy.tooltip": {
       "extractionState": "manual",
       "localizations": {
@@ -6232,6 +6419,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "今日 AI 推理耗电（服务器端）：约 %1$@，区间 %2$@ 到 %3$@"
+          }
+        }
+      }
+    },
+    "statusItem.energy.tooltip.24h": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI inference energy, last 24 hours (server-side): about %1$@, range %2$@ to %3$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "过去 24 小时 AI 推理耗电（服务器端）：约 %1$@，区间 %2$@ 到 %3$@"
           }
         }
       }
@@ -6253,6 +6457,23 @@
         }
       }
     },
+    "statusItem.local.tooltip.24h": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Mac, last 24 hours: %@ measured"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "过去 24 小时本机耗电：实测 %@"
+          }
+        }
+      }
+    },
     "statusItem.tokens.tooltip": {
       "extractionState": "manual",
       "localizations": {
@@ -6266,6 +6487,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "今日 token：%@"
+          }
+        }
+      }
+    },
+    "statusItem.tokens.tooltip.24h": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tokens, last 24 hours: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "过去 24 小时 token：%@"
           }
         }
       }

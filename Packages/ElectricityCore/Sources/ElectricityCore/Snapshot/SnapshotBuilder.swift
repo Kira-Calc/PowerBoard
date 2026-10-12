@@ -8,9 +8,12 @@ public enum SnapshotBuilder {
         calendar: Calendar = .current,
         appRunning: Bool = true,
         includeLocalEnergy: Bool = false,
-        grid: [GridProvider: GridStatus] = [:]
+        grid: [GridProvider: GridStatus] = [:],
+        dayWindow: DayWindow = .calendarDay
     ) throws -> Snapshot {
-        let day = LocalPeriod.day.interval(containing: now, calendar: calendar)
+        // For the last 24 hours the end is a little past now, so records written this second are included.
+        let window = dayWindow.interval(now: now, calendar: calendar)
+        let day = dayWindow == .calendarDay ? window : DateInterval(start: window.start, end: now.addingTimeInterval(60))
         let totals = try store.totals(from: day.start, to: day.end)
         let bySource = try store.totalsBySource(from: day.start, to: day.end)
 
@@ -47,7 +50,8 @@ public enum SnapshotBuilder {
                 cleanShare: nil,
                 bySource: shares,
                 localEnergyWh: includeLocalEnergy ? try store.localEnergy(from: day.start, to: day.end) : nil,
-                grid: mainProvider(bySource: bySource).flatMap { grid[$0] }.map(Snapshot.Grid.init)
+                grid: mainProvider(bySource: bySource).flatMap { grid[$0] }.map(Snapshot.Grid.init),
+                window: dayWindow
             ),
             sessions: sessions,
             lastHourSparklineWh: sparkline

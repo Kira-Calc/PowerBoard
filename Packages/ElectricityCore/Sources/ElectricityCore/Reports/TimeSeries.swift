@@ -10,8 +10,14 @@ public enum ChartScale: String, Sendable, Hashable, CaseIterable {
     case week
 
     /// Bucket boundaries in local time; `count + 1` dates, ascending. DST-safe.
-    public func boundaries(now: Date, calendar: Calendar = .current) -> [Date] {
+    /// With `last24Hours`, the hourly scale covers the 24 hours up to now instead of today.
+    public func boundaries(now: Date, calendar: Calendar = .current, dayWindow: DayWindow = .calendarDay) -> [Date] {
         switch self {
+        case .hour where dayWindow == .last24Hours:
+            // Whole hours, with a short first bucket so the range is exactly 24 hours and ends at the current hour's end.
+            let end = calendar.dateInterval(of: .hour, for: now)?.end ?? now
+            let start = end.addingTimeInterval(-24 * 3600)
+            return (0...24).map { start.addingTimeInterval(Double($0) * 3600) }
         case .hour:
             let day = LocalPeriod.day.interval(containing: now, calendar: calendar)
             var dates: [Date] = []

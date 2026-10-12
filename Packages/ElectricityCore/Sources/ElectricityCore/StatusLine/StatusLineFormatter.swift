@@ -35,6 +35,7 @@ public enum StatusLineFormatter {
         let carbon = ValueFormatting.carbon(grams: snapshot.today.co2G).text
         let session = sessionID.flatMap { snapshot.sessions[$0] }.map { ValueFormatting.energy(wh: $0.energyWhMid).text }
 
+        let rolling = snapshot.today.window == .last24Hours
         var parts: [String]
         switch (format, language) {
         case (.compact, _):
@@ -42,13 +43,13 @@ public enum StatusLineFormatter {
         case (.default, .en):
             parts = [
                 session.map { "\(style.value($0)) session" },
-                "\(style.value(today)) today",
+                rolling ? "\(style.value(today)) 24h" : "\(style.value(today)) today",
                 "\(style.value(carbon)) CO2e",
             ].compactMap { $0 }
         case (.default, .zh):
             parts = [
                 session.map { "本会话 \(style.value($0))" },
-                "今日 \(style.value(today))",
+                rolling ? "24 小时 \(style.value(today))" : "今日 \(style.value(today))",
                 "\(style.value(carbon)) CO2e",
             ].compactMap { $0 }
         }

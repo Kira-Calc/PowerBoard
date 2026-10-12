@@ -21,6 +21,19 @@ struct GeneralSettingsPage: View {
                 }
             }
             Section {
+                Picker(selection: $settings.dayWindow) {
+                    Text("general.dayWindow.calendar").tag(DayWindow.calendarDay)
+                    Text("general.dayWindow.last24h").tag(DayWindow.last24Hours)
+                } label: {
+                    HStack(spacing: 6) {
+                        Text("general.dayWindow")
+                        InfoTip(["general.dayWindow.note"])
+                    }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: settings.dayWindow) { context.coordinator.applyDayWindowSetting() }
+            }
+            Section {
                 Toggle(isOn: $settings.includeLocalEnergy) {
                     HStack(spacing: 6) {
                         Text("general.localEnergy")

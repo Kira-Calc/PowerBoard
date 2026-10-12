@@ -45,7 +45,11 @@ final class IngestCoordinator {
         let publisher = SnapshotPublisher(store: store, url: AppPaths.snapshot)
         self.publisher = publisher
         let includeLocal = settings.includeLocalEnergy
-        Task { await publisher.setIncludeLocalEnergy(includeLocal) }
+        let dayWindow = settings.dayWindow
+        Task {
+            await publisher.setIncludeLocalEnergy(includeLocal)
+            await publisher.setDayWindow(dayWindow)
+        }
 
         let (stream, continuation) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
         triggers = continuation
@@ -83,6 +87,17 @@ final class IngestCoordinator {
         startWatcher(locations: locations)
         applyLocalEnergySetting()
         continuation.yield()
+    }
+
+    /// Switches the "today" figures between the calendar day and the last 24 hours.
+    func applyDayWindowSetting() {
+        guard let publisher else { return }
+        let window = settings.dayWindow
+        Task {
+            await publisher.setDayWindow(window)
+            await self.refreshSnapshot()
+            self.model.dataVersion += 1
+        }
     }
 
     // MARK: Local energy

@@ -91,9 +91,11 @@ public struct Snapshot: Sendable, Hashable, Codable {
         /// Measured energy of this Mac today, in Wh. Present only when the user turned the feature on.
         public var localEnergyWh: Double?
         public var grid: Grid?
+        /// What "today" covers: the calendar day (default when absent) or the last 24 hours.
+        public var window: DayWindow?
 
         enum CodingKeys: String, CodingKey {
-            case date, tokens
+            case date, tokens, window
             case energyWh = "energy_wh"
             case co2G = "co2_g"
             case cleanShare = "clean_share"
@@ -103,7 +105,8 @@ public struct Snapshot: Sendable, Hashable, Codable {
         }
 
         public init(date: String, tokens: Tokens, energyWh: Estimate, co2G: Double, cleanShare: Double?, bySource: [String: SourceShare],
-                    localEnergyWh: Double? = nil, grid: Grid? = nil) {
+                    localEnergyWh: Double? = nil, grid: Grid? = nil, window: DayWindow? = nil) {
+            self.window = window
             self.date = date
             self.tokens = tokens
             self.energyWh = energyWh
@@ -125,6 +128,7 @@ public struct Snapshot: Sendable, Hashable, Codable {
             try container.encode(bySource, forKey: .bySource)
             try container.encodeIfPresent(localEnergyWh, forKey: .localEnergyWh)
             try container.encodeIfPresent(grid, forKey: .grid)
+            try container.encodeIfPresent(window, forKey: .window)
         }
 
         public func energyWhMid(for source: UsageSource) -> Double {
@@ -220,5 +224,18 @@ public enum SnapshotFile {
             return nil
         }
         return try decoder().decode(Snapshot.self, from: data)
+    }
+}
+
+/// What the "today" figures cover. The calendar day starts again at midnight; the last 24 hours roll on.
+public enum DayWindow: String, Sendable, Hashable, Codable, CaseIterable {
+    case calendarDay = "calendar_day"
+    case last24Hours = "last_24h"
+
+    public func interval(now: Date, calendar: Calendar = .current) -> DateInterval {
+        switch self {
+        case .calendarDay: LocalPeriod.day.interval(containing: now, calendar: calendar)
+        case .last24Hours: DateInterval(start: now.addingTimeInterval(-24 * 3600), end: now)
+        }
     }
 }

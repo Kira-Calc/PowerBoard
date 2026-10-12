@@ -97,7 +97,8 @@ private struct EnergySection: View {
                 EnergyBreakdown(server: energy.server.mid, local: local, settings: settings)
                     .padding(.top, 4)
             }
-            if model.gridConfigured, let status = model.mainGridStatus {
+            // Live level when connected; otherwise the latest published day, labeled as such.
+            if let status = model.mainGridStatus, model.gridConfigured || status.recentLevel != nil {
                 GridLine(status: status).padding(.top, 2)
             }
         }

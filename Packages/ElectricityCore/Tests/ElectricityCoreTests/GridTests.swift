@@ -243,6 +243,51 @@ private final class FakeTransport: HTTPTransport, @unchecked Sendable {
         #expect(throws: GridAPIError.missingData) { try EIAFuelMixClient.parse(Data("[{\"data\": []}]".utf8), balancingAuthority: "TEST") }
     }
 
+    /// Hand-written EIA response: one row per fuel, `days` days of hourly data starting 2026-09-01 00:00 UTC.
+    private func eiaJSON(days: Int, cleanShareOfDay: (Int) -> Double) -> Data {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "MM/dd/yyyy HH:mm:ss"
+        let start = Date(timeIntervalSince1970: 1_788_220_800) // 2026-09-01 00:00 UTC
+        let hours = (0..<(days * 24)).map { start.addingTimeInterval(Double($0) * 3600) }
+        let dates = hours.map { "\"\(formatter.string(from: $0))\"" }.joined(separator: ",")
+        let wind = (0..<hours.count).map { String(cleanShareOfDay($0 / 24) * 1000) }.joined(separator: ",")
+        let gas = (0..<hours.count).map { String((1 - cleanShareOfDay($0 / 24)) * 1000) }.joined(separator: ",")
+        return Data("""
+            [{"data": [{"FUEL_TYPE_ID": "WND", "VALUES": {"DATES": [\(dates)], "DATA": [\(wind)]}},
+                       {"FUEL_TYPE_ID": "NG", "VALUES": {"DATES": [\(dates)], "DATA": [\(gas)]}}]}]
+            """.utf8)
+    }
+
+    @Test func eiaLatestDayIsRankedAgainstThePreviousThirtyDays() throws {
+        // 31 days; earlier days run from 20% to 49% fossil-free, the latest day is 60%: cleaner than all of them.
+        let cleanest = try EIAFuelMixClient.parse(eiaJSON(days: 31) { $0 == 30 ? 0.6 : 0.2 + Double($0) * 0.01 }, balancingAuthority: "T")
+        #expect(cleanest.baselineDays == 30)
+        #expect(cleanest.percentile == 0)
+        #expect(abs(cleanest.cleanShare - 0.6) < 1e-9)
+        // The latest day at 10% is below every earlier day: least clean.
+        let dirtiest = try EIAFuelMixClient.parse(eiaJSON(days: 31) { $0 == 30 ? 0.1 : 0.2 + Double($0) * 0.01 }, balancingAuthority: "T")
+        #expect(dirtiest.percentile == 100)
+        // Too few earlier days to compare with: share only, no percentile.
+        let short = try EIAFuelMixClient.parse(eiaJSON(days: 10) { _ in 0.4 }, balancingAuthority: "T")
+        #expect(short.percentile == nil)
+        #expect(short.baselineDays == 9)
+    }
+
+    @Test func recentPercentileCountsTiesAsHalfAndGivesALevel() {
+        #expect(RecentFuelMix.percentile(latest: 0.5, baseline: Array(repeating: 0.5, count: 20)) == 50)
+        #expect(RecentFuelMix.percentile(latest: 0.5, baseline: Array(repeating: 0.4, count: 13)) == nil)
+        let candidate = candidate("a", weight: 1)
+        let mix = RecentFuelMix(balancingAuthority: "A", cleanShare: 0.5, start: Date(), end: Date(), percentile: 10, baselineDays: 30)
+        let status = GridCombiner.combine(provider: .anthropic, candidates: [candidate],
+                                          readings: [CandidateReading(candidateID: "a", source: .static, recentMix: mix)],
+                                          thresholds: GridThresholds())
+        #expect(status.level == nil)
+        #expect(status.recentLevel == GridLevel.cleaner)
+        #expect(status.recentPercentile == 10)
+    }
+
     @Test func bundledCandidatesHaveBalancingAuthorities() throws {
         let table = try GridRegionTable.bundled()
         for provider in GridProvider.allCases {

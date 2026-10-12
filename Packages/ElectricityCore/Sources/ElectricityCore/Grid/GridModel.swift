@@ -140,6 +140,32 @@ public struct RecentFuelMix: Sendable, Hashable, Codable {
     public var cleanShare: Double
     public var start: Date
     public var end: Date
+    /// Where the latest day ranks among the previous days of the same region, from 0 (cleanest) to 100 (least clean),
+    /// by fossil-free share. Nil when fewer than `minimumBaselineDays` earlier days have data.
+    public var percentile: Double?
+    /// How many earlier days the percentile compares with.
+    public var baselineDays: Int?
+
+    public static let baselineDayCount = 30
+    public static let minimumBaselineDays = 14
+
+    public init(balancingAuthority: String, cleanShare: Double, start: Date, end: Date, percentile: Double? = nil, baselineDays: Int? = nil) {
+        self.balancingAuthority = balancingAuthority
+        self.cleanShare = cleanShare
+        self.start = start
+        self.end = end
+        self.percentile = percentile
+        self.baselineDays = baselineDays
+    }
+
+    /// Percentile of `latest` among `baseline` on the WattTime scale: 0 when no earlier day was cleaner,
+    /// 100 when every earlier day was cleaner. Ties count half.
+    public static func percentile(latest: Double, baseline: [Double]) -> Double? {
+        guard baseline.count >= minimumBaselineDays else { return nil }
+        let cleaner = Double(baseline.filter { $0 > latest }.count)
+        let equal = Double(baseline.filter { $0 == latest }.count)
+        return (cleaner + equal / 2) / Double(baseline.count) * 100
+    }
 }
 
 /// Combined grid state for one provider.
@@ -160,11 +186,15 @@ public struct GridStatus: Sendable, Hashable, Codable {
     /// Weighted fossil-free share of the latest published day, with the end of its window.
     public var recentCleanShare: Double?
     public var recentMixEnd: Date?
+    /// Latest published day compared with the previous 30 days of the same regions (EIA, no account).
+    /// Describes that past day, so it is never used as the level now or saved with records.
+    public var recentPercentile: Double?
+    public var recentLevel: GridLevel?
 
     public static func unknown(_ provider: GridProvider) -> GridStatus {
         GridStatus(provider: provider, level: nil, percentile: nil, gramsPerKWh: nil, cleanShare: nil, source: nil,
                    certainty: .unknown, updatedAt: nil, mixed: false, candidates: [], candidateLevels: [:],
-                   recentCleanShare: nil, recentMixEnd: nil)
+                   recentCleanShare: nil, recentMixEnd: nil, recentPercentile: nil, recentLevel: nil)
     }
 }
 
@@ -185,6 +215,7 @@ public enum GridCombiner {
         }
 
         let percentile = weighted(\.percentile)
+        let recentPercentile = weighted { $0.recentMix?.percentile }
         var levels: [String: GridLevel] = [:]
         for reading in present {
             if let value = reading.percentile { levels[reading.candidateID] = thresholds.level(percentile: value) }
@@ -211,7 +242,9 @@ public enum GridCombiner {
             candidates: present,
             candidateLevels: levels,
             recentCleanShare: weighted { $0.recentMix?.cleanShare },
-            recentMixEnd: present.compactMap { $0.recentMix?.end }.max()
+            recentMixEnd: present.compactMap { $0.recentMix?.end }.max(),
+            recentPercentile: recentPercentile,
+            recentLevel: recentPercentile.map { thresholds.level(percentile: $0) }
         )
     }
 }

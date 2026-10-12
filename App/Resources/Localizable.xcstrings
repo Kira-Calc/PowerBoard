@@ -2458,13 +2458,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sign in to WattTime below to see whether the grid powering the AI servers is cleaner or less clean right now than over the next 24 hours. Without it, only yearly averages are shown."
+            "value": "Without an account, PowerBoard compares the latest published day with the previous 30 days. Sign in to WattTime below to see whether each grid is cleaner or less clean right now."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在下方登录 WattTime 后，可以看到 AI 服务器所在电网此刻比接下来 24 小时更清洁还是更不清洁。未连接时只显示年均水平。"
+            "value": "不登录时，PowerBoard 会把最近发布的一天与之前 30 天比较，给出等级。在下方登录 WattTime 后，可以看到各电网此刻比接下来 24 小时更清洁还是更不清洁。"
           }
         }
       }
@@ -2537,6 +2537,23 @@
         }
       }
     },
+    "grid.overview.recentDetail": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latest day · fossil-free %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近一天 · 清洁电力 %@"
+          }
+        }
+      }
+    },
     "grid.overview.title": {
       "extractionState": "manual",
       "localizations": {
@@ -2554,19 +2571,36 @@
         }
       }
     },
+    "grid.recent.asOf": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "as of %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "截至 %@"
+          }
+        }
+      }
+    },
     "grid.recent.note": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "“Latest day” comes from the US EIA Hourly Electric Grid Monitor, which needs no account but is often published about a day late. It describes that past day, not the grid now. Fossil-free: solar, wind, hydro, nuclear and geothermal; battery storage is left out."
+            "value": "Without a WattTime account, the level compares the latest published day with the 30 days before it in the same regions, by fossil-free share (solar, wind, hydro, nuclear and geothermal; battery storage left out), on the same 0 to 100 scale. Data comes from the US EIA Hourly Electric Grid Monitor, needs no account and is usually about a day late, so it describes that day, not the grid now. It is not saved with your usage records."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "“近一天”来自美国 EIA 小时电网监测，不需要账号，但通常晚一天左右发布。它描述的是那一天，不代表此刻的电网。清洁电力包括太阳能、风电、水电、核电和地热，不计储能电池。"
+            "value": "未登录 WattTime 时，等级的算法是：把最近发布的一天与同一地区之前 30 天比较清洁电力占比（太阳能、风电、水电、核电和地热，不计储能电池），换算成同样的 0 到 100 百分位。数据来自美国 EIA 小时电网监测，不需要账号，但通常晚一天左右发布，所以它描述的是那一天，不代表此刻的电网，也不会记录到你的用量中。"
           }
         }
       }
@@ -2584,6 +2618,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "最近一天的清洁电力占比约 %1$@（截至 %2$@，EIA）。"
+          }
+        }
+      }
+    },
+    "grid.recentLevel.help": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Percentile %lld among the previous 30 days by fossil-free share (0 is cleanest). Data up to %@, from the US EIA."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按清洁电力占比，在过去 30 天中的百分位为 %lld（0 最清洁）。数据截至 %@，来自美国 EIA。"
+          }
+        }
+      }
+    },
+    "grid.recentLevel.tag": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latest day"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近一天"
           }
         }
       }
@@ -2653,6 +2721,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "服务器电网：%@"
+          }
+        }
+      }
+    },
+    "grid.summary.recent": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server grid (latest day): %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务器电网（最近一天）：%@"
           }
         }
       }

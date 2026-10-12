@@ -78,7 +78,7 @@ Cleanliness is shown for information only. The app does not pause, delay or sche
 
 - **Where requests run is not public.** For each provider the app uses 3 to 5 candidate data center locations taken from public reports, each with a weight. All locations are estimates and are shown with hollow dots. The list and sources are in `grid-regions.json`.
 - **Live level (needs a free WattTime account).** WattTime's `signal-index` gives a percentile from 0 (cleanest) to 100 (dirtiest) that compares each grid now with its own forecast for the next 24 hours. Below 33 is shown as "cleaner", above 67 as "less clean" (adjustable). The provider level combines the candidate locations by weight. It is a relative signal: "cleaner" in a coal-heavy grid can still have more carbon per kWh than "less clean" in a hydro grid.
-- **Latest published day (no account).** The fossil-free share of each candidate's balancing authority over the last 24 published hours, from the US EIA hourly grid monitor. Clean sources are solar, wind, hydro, nuclear and geothermal; battery output is excluded. EIA usually publishes about one day late, so this is not the grid now.
+- **Latest published day (no account).** The fossil-free share of each candidate's balancing authority over the last 24 published hours, from the US EIA hourly grid monitor (solar, wind, hydro, nuclear and geothermal; battery output is excluded). That day is ranked against the 30 days before it in the same region: the percentile is the share of those days that were cleaner, with ties counting half, so 0 is the cleanest and 100 the least clean, the same scale and thresholds as WattTime. At least 14 earlier days are needed. The provider level combines the candidates by weight. EIA usually publishes about one day late, so this describes that day, not the grid now; it is shown with a "latest day" label, is not shown in the menu bar or the terminal status line, and is not saved with usage records. Fossil-free share is a proxy: it does not tell gas from coal.
 - **Annual average (fallback).** US EPA eGRID2023 subregion emission rates. Shown as values, without a level.
 - **Optional:** an Electricity Maps API key adds live carbon intensity and fossil-free share.
 
@@ -204,7 +204,7 @@ App 只读取计数需要的字段（token 数、模型名、时间、会话 ID�
 
 - **请求在哪里处理并不公开。** 每家服务商使用 3 到 5 个根据公开报道推测的候选数据中心地点，各带一个权重。所有地点都是推测的，显示为空心圆点。地点列表和资料来源见 `grid-regions.json`。
 - **实时等级（需要免费的 WattTime 账号）。** WattTime 的 `signal-index` 给出 0（最清洁）到 100（最不清洁）的百分位，比较的是各电网此刻与它自己未来 24 小时的预测。低于 33 显示为"较清洁"，高于 67 显示为"较不清洁"（可调）。服务商的等级是各候选地点按权重合并的结果。这是相对指标：以煤电为主的电网"较清洁"时，每度电的碳排仍可能高于以水电为主的电网"较不清洁"时。
-- **最近发布的一天（不需要账号）。** 来自美国 EIA 小时电网监测，是各候选地点所属平衡区最近 24 个已发布小时的清洁电力占比。清洁电力包括太阳能、风电、水电、核电和地热，不计储能电池。EIA 通常晚一天左右发布，所以它不代表此刻的电网。
+- **最近发布的一天（不需要账号）。** 来自美国 EIA 小时电网监测，是各候选地点所属平衡区最近 24 个已发布小时的清洁电力占比（太阳能、风电、水电、核电和地热，不计储能电池）。这一天会与同一地区之前 30 天比较：百分位等于其中更清洁的天数所占比例，持平的天数按一半计，所以 0 最清洁、100 最不清洁，刻度和阈值与 WattTime 相同。至少需要 14 天的历史数据。服务商的等级是各候选地点按权重合并的结果。EIA 通常晚一天左右发布，所以它描述的是那一天，不代表此刻；界面上标注为"最近一天"，不显示在菜单栏和终端状态栏中，也不记录到用量中。清洁电力占比只是近似指标，它不区分燃气和燃煤。
 - **年均值（回退）。** 美国 EPA eGRID2023 各子区域的排放率。只显示数值，不显示等级。
 - **可选：** 填入 Electricity Maps API 密钥后，补充实时碳强度和清洁电力占比。
 

@@ -24,7 +24,8 @@ public struct EIAFuelMixClient: Sendable {
         components.queryItems = [
             URLQueryItem(name: "type[0]", value: "NG"),
             URLQueryItem(name: "respondent[0]", value: balancingAuthority),
-            URLQueryItem(name: "start", value: formatter.string(from: now.addingTimeInterval(-4 * 86400))),
+            // The latest day plus 30 earlier days to compare it with, and a margin for EIA's delay.
+            URLQueryItem(name: "start", value: formatter.string(from: now.addingTimeInterval(-Double(RecentFuelMix.baselineDayCount + 3) * 86400))),
             URLQueryItem(name: "end", value: formatter.string(from: now)),
             URLQueryItem(name: "frequency", value: "hourly"),
             URLQueryItem(name: "timezone", value: "UTC"),
@@ -36,7 +37,7 @@ public struct EIAFuelMixClient: Sendable {
         return try Self.parse(data, balancingAuthority: balancingAuthority)
     }
 
-    /// Sums the latest 24 hours that have data and returns the fossil-free share.
+    /// Fossil-free share of the latest 24 hours that have data, and its rank among the 30 days before it.
     static func parse(_ data: Data, balancingAuthority: String) throws -> RecentFuelMix {
         guard let blocks = try JSONSerialization.jsonObject(with: data) as? [[String: Any]],
               let rows = blocks.first?["data"] as? [[String: Any]]
@@ -61,15 +62,24 @@ public struct EIAFuelMixClient: Sendable {
             }
         }
         guard let latest = byHour.keys.max() else { throw GridAPIError.missingData }
-        let start = latest.addingTimeInterval(-23 * 3600)
-        let window = byHour.filter { $0.key >= start }
-        let total = window.values.reduce(0) { $0 + $1.total }
-        guard total > 0, window.count >= 12 else { throw GridAPIError.missingData }
+        // Day k covers the 24 hours ending 24k hours before the latest hour. A day needs at least 12 hours of data.
+        func share(day k: Int) -> Double? {
+            let end = latest.addingTimeInterval(-Double(24 * k) * 3600)
+            let start = end.addingTimeInterval(-23 * 3600)
+            let window = byHour.filter { $0.key >= start && $0.key <= end }
+            let total = window.values.reduce(0) { $0 + $1.total }
+            guard total > 0, window.count >= 12 else { return nil }
+            return window.values.reduce(0) { $0 + $1.clean } / total
+        }
+        guard let latestShare = share(day: 0) else { throw GridAPIError.missingData }
+        let baseline = (1...RecentFuelMix.baselineDayCount).compactMap { share(day: $0) }
         return RecentFuelMix(
             balancingAuthority: balancingAuthority,
-            cleanShare: window.values.reduce(0) { $0 + $1.clean } / total,
-            start: start,
-            end: latest.addingTimeInterval(3600)
+            cleanShare: latestShare,
+            start: latest.addingTimeInterval(-23 * 3600),
+            end: latest.addingTimeInterval(3600),
+            percentile: RecentFuelMix.percentile(latest: latestShare, baseline: baseline),
+            baselineDays: baseline.count
         )
     }
 }

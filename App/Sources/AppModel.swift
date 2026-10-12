@@ -55,7 +55,7 @@ final class AppModel {
 
     /// Grid state for the servers used most today, as written to the snapshot.
     var mainGridStatus: GridStatus? {
-        let provider = snapshot?.today.grid?.provider ?? .anthropic
+        let provider = snapshot?.today.grid?.provider ?? usedProviders.first ?? .anthropic
         return gridStatuses[provider]
     }
     /// Latest whole-system power reading in watts, nil when unavailable or not sampled.

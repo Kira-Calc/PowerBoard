@@ -29,7 +29,7 @@ struct GridOverviewCard: View {
     private func row(_ status: GridStatus) -> some View {
         GridRow {
             HStack(spacing: 8) {
-                GridDot(level: status.level, certainty: status.certainty, size: 10)
+                GridDot(level: status.level ?? status.recentLevel, certainty: status.certainty, size: 10)
                 Text(verbatim: GridText.provider(status.provider)).font(.body.weight(.medium))
             }
             if let level = status.level {
@@ -37,6 +37,18 @@ struct GridOverviewCard: View {
                     .font(.body.weight(.semibold))
                     .foregroundStyle(GridText.color(level))
                     .help(status.percentile.map { String(format: String(localized: "grid.overview.percentile"), Int($0.rounded())) } ?? "")
+            } else if let level = status.recentLevel {
+                // No live data: the latest published day compared with the 30 days before it (EIA).
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(GridText.level(level))
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(GridText.color(level))
+                    Text(String(format: String(localized: "grid.overview.recentDetail"),
+                                status.recentCleanShare.map { String(format: "%.0f%%", $0 * 100) } ?? "–"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .help(GridText.recentHelp(status))
             } else if let share = status.recentCleanShare {
                 Text(String(format: String(localized: "grid.overview.recent"), String(format: "%.0f%%", share * 100)))
                     .foregroundStyle(.secondary)
@@ -45,7 +57,7 @@ struct GridOverviewCard: View {
                 Text(context.model.gridLoading ? String(localized: "grid.loading") : GridText.level(nil)).foregroundStyle(.secondary)
             }
             Spacer()
-            Text(verbatim: status.updatedAt.map { String(format: String(localized: "grid.updated"), Formatting.time($0)) } ?? "")
+            Text(verbatim: GridText.timeLabel(status))
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .gridColumnAlignment(.trailing)

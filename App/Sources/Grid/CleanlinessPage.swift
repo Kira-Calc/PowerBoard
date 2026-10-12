@@ -32,13 +32,13 @@ struct CleanlinessPage: View {
         let candidates = table?.candidates(for: provider) ?? []
         return Card {
             HStack(spacing: 10) {
-                GridDot(level: status.level, certainty: status.certainty, size: 14)
+                GridDot(level: status.level ?? status.recentLevel, certainty: status.certainty, size: 14)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(verbatim: GridText.provider(provider)).font(.headline)
                         InfoTip(GridTips.level)
                     }
-                    if status.level == nil {
+                    if status.level == nil && status.recentLevel == nil {
                         Text(status.source == .static ? String(localized: "grid.staticOnly") : GridText.summary(status))
                             .foregroundStyle(.secondary)
                     }
@@ -48,6 +48,14 @@ struct CleanlinessPage: View {
                     Text(GridText.level(level))
                         .font(.title2.weight(.semibold))
                         .foregroundStyle(GridText.color(level))
+                } else if let level = status.recentLevel {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(GridText.level(level))
+                            .font(.title2.weight(.semibold))
+                            .foregroundStyle(GridText.color(level))
+                        Text("grid.recentLevel.tag").font(.caption).foregroundStyle(.secondary)
+                    }
+                    .help(GridText.recentHelp(status))
                 }
             }
             if let share = status.recentCleanShare, let end = status.recentMixEnd {
@@ -87,8 +95,13 @@ struct CleanlinessPage: View {
                         }
                         Text(verbatim: reading?.gramsPerKWh.map { String(format: "%.0f", $0) } ?? "–").monospacedDigit()
                         Text(verbatim: reading?.cleanShare.map { String(format: "%.0f%%", $0 * 100) } ?? "–").monospacedDigit()
-                        Text(verbatim: reading?.recentMix.map { String(format: "%.0f%%", $0.cleanShare * 100) } ?? "–")
-                            .monospacedDigit()
+                        HStack(spacing: 5) {
+                            Text(verbatim: reading?.recentMix.map { String(format: "%.0f%%", $0.cleanShare * 100) } ?? "–")
+                            if let percentile = reading?.recentMix?.percentile {
+                                Text(verbatim: "\(Int(percentile.rounded()))").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        .monospacedDigit()
                             .help(reading?.recentMix.map { "EIA \($0.balancingAuthority)" } ?? "")
                     }
                     .font(.callout)

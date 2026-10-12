@@ -153,7 +153,7 @@ Output is in English unless `--lang zh` is given or the language is changed in S
 
 Providers do not disclose where a request runs, so the app uses a few candidate data center locations per provider, taken from public reports.
 
-- **Without an account:** each location's yearly average (US EPA eGRID) and the fossil-free share of the latest published day (US EIA, usually about one day late).
+- **Without an account:** a level for the latest published day, comparing its fossil-free share with the 30 days before it in the same regions (US EIA, usually about one day late), plus each location's yearly average (US EPA eGRID). It describes that past day, not now.
 - **With a free WattTime account** (create or sign in on the Grid page): whether each grid is cleaner or less clean now than over its next 24 hours.
 - **Optional:** an Electricity Maps API key adds live carbon intensity.
 

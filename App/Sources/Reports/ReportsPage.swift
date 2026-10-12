@@ -7,6 +7,8 @@ struct ReportsPage: View {
     let context: DashboardContext
 
     @AppStorage("reports.period") private var period: ReportPeriod = .week
+    /// False: calendar day, week, month or year. True: the last 24 hours, 7 days, 30 days or 12 months.
+    @AppStorage("reports.rolling") private var rolling = false
     @State private var anchor = Date()
     @State private var report: Report?
     @State private var showExport = false
@@ -28,10 +30,8 @@ struct ReportsPage: View {
             }
             AutoExportCard(settings: context.autoExport)
         }
-        .storeQuery(context.model, id: [AnyHashable(period), AnyHashable(anchor)]) { [period, anchor] store in
-            try ReportBuilder.build(store: store, period: period, containing: anchor)
-        } assign: { result in
-            withAnimation(.smooth(duration: 0.3)) { report = result }
+        .task(id: [AnyHashable(period), AnyHashable(anchor), AnyHashable(rolling), AnyHashable(context.model.dataVersion)]) {
+            await load()
         }
         .sheet(isPresented: $showExport) {
             if let report { ExportSheet(report: report, store: context.model.store) }
@@ -43,7 +43,19 @@ struct ReportsPage: View {
 
     private var interval: DateInterval { period.interval(containing: anchor) }
 
-    private var isCurrent: Bool { interval.contains(Date()) }
+    private var isCurrent: Bool { rolling || interval.contains(Date()) }
+
+    /// Builds the report off the main thread, with the generation mix for its interval.
+    private func load() async {
+        guard let store = context.model.store else { return }
+        let (period, anchor, rolling) = (period, anchor, rolling)
+        let now = Date()
+        let mixes = await context.model.energyMixes(for: ReportBuilder.interval(period: period, rolling: rolling, containing: anchor, now: now))
+        let result = await Task.detached {
+            try? ReportBuilder.build(store: store, period: period, containing: anchor, rolling: rolling, energyMixes: mixes, now: now)
+        }.value
+        if let result { withAnimation(.smooth(duration: 0.3)) { report = result } }
+    }
 
     private var controls: some View {
         HStack(spacing: 12) {
@@ -57,6 +69,20 @@ struct ReportsPage: View {
             .labelsHidden()
             .fixedSize()
 
+            Picker("", selection: $rolling) {
+                Text("reports.mode.calendar").tag(false)
+                Text("reports.mode.rolling").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .help(Text("reports.mode.help"))
+
+            if rolling {
+                Text(verbatim: report.map { strings.periodLabel($0) } ?? "")
+                    .font(.headline)
+                    .monospacedDigit()
+            } else {
             HStack(spacing: 4) {
                 Button { shift(-1) } label: { SymbolIcon(Icons.previous, size: 13) }
                     .help(Text("reports.previous"))
@@ -74,8 +100,9 @@ struct ReportsPage: View {
             if !isCurrent {
                 Button("reports.current") { anchor = Date() }
             }
+            }
             Spacer()
-            if period == .year {
+            if period == .year && !rolling {
                 Button("reports.yearSummary") { showYear = true }
             }
             Button {
@@ -97,6 +124,7 @@ struct ReportsPage: View {
             CardHeader(icon: Icons.lightning, color: Palette.energy, title: "reports.energy", serverTag: true)
                 .environment(\.locale, strings.locale)
             ReportSummaryView(report: report, strings: strings)
+            ReportTokenLine(report: report, strings: strings)
             if let peak = report.peak {
                 Text(verbatim: "\(strings(.peak))\(strings.language == .zh ? "：" : ": ")\(ReportExporter.peakLabel(peak, period: report.period, strings: strings, calendar: .current))")
                     .font(.callout)
@@ -105,22 +133,57 @@ struct ReportsPage: View {
         }
         Card {
             CardHeader(icon: Icons.calendarBlank, color: Palette.energy, title: "reports.trend")
-            ReportTrendChart(report: report, strings: strings).frame(height: 220)
+            Grid(horizontalSpacing: 20, verticalSpacing: 16) {
+                GridRow {
+                    chart(strings(.energyChart), report, .energy, cumulative: false)
+                    chart(strings(.energyCumulative), report, .energy, cumulative: true)
+                }
+                GridRow {
+                    chart(strings(.tokenChart), report, .tokens, cumulative: false)
+                    chart(strings(.tokenCumulative), report, .tokens, cumulative: true)
+                }
+            }
         }
         HStack(alignment: .top, spacing: 16) {
             Card {
-                CardHeader(icon: Icons.terminalWindow, color: Palette.neutral, title: "reports.byTool")
-                ReportBreakdownTable(kind: .tool, items: report.bySource, strings: strings)
+                CardHeader(icon: Icons.leaf, color: Palette.clean, title: "reports.energyMix")
+                if let mix = report.energyMix {
+                    ReportEnergyMixView(mix: mix, strings: strings, donut: 130)
+                } else {
+                    Text("grid.loading").foregroundStyle(.secondary)
+                }
             }
-            Card {
-                CardHeader(icon: Icons.function, color: Palette.neutral, title: "reports.byModel")
-                ReportBreakdownTable(kind: .model, items: report.byModel, strings: strings)
+            if report.hasGridLevels {
+                Card {
+                    CardHeader(icon: Icons.leaf, color: Palette.clean, title: "reports.byGridLevel")
+                    ReportGridLevelView(report: report, strings: strings)
+                }
+                .frame(width: 280)
             }
         }
         .fixedSize(horizontal: false, vertical: true)
         Card {
+            CardHeader(icon: Icons.terminalWindow, color: Palette.neutral, title: "reports.byTool")
+            ReportBreakdownTable(kind: .tool, items: report.bySource, strings: strings)
+        }
+        Card {
+            CardHeader(icon: Icons.function, color: Palette.neutral, title: "reports.byModel")
+            ReportBreakdownTable(kind: .model, items: report.byModel, strings: strings)
+        }
+        Card {
             CardHeader(icon: Icons.folderOpen, color: Palette.neutral, title: "reports.byProject")
             ReportBreakdownTable(kind: .project, items: report.byProject, strings: strings, maxRows: 12)
+        }
+    }
+}
+
+extension ReportsPage {
+    fileprivate func chart(_ title: String, _ report: Report, _ metric: ReportUsageChart.Metric, cumulative: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(verbatim: title).font(.subheadline.weight(.semibold))
+            ReportUsageChart(report: report, strings: strings, metric: metric, cumulative: cumulative)
+                .font(.caption)
+                .frame(height: 160)
         }
     }
 }

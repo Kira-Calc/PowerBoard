@@ -59,11 +59,15 @@ enum ReportExport {
         let options = ExportOptions(language: strings.language, hideProjects: hideProjects)
         switch format {
         case .pngPortrait:
-            return try png(ShareCardView(report: report, strings: strings, landscape: false), width: 1080, height: 1350)
+            return try png(ReportCanvas(report: report, strings: strings, hideProjects: hideProjects))
         case .pngLandscape:
-            return try png(ShareCardView(report: report, strings: strings, landscape: true), width: 1600, height: 900)
+            return try png(ReportCanvas(report: report, strings: strings, hideProjects: hideProjects, landscape: true))
         case .pdf:
-            return try pdf(ReportDocumentView(report: report, strings: strings, hideProjects: hideProjects))
+            // Page 1 is the same as the portrait image; page 2 has the model and project breakdowns and the method.
+            return try pdf([
+                AnyView(ReportCanvas(report: report, strings: strings, hideProjects: hideProjects)),
+                AnyView(ReportDetailsPage(report: report, strings: strings, hideProjects: hideProjects)),
+            ], size: ReportCanvas.portraitSize)
         case .csv:
             return ReportExporter.csv(try store.events(from: report.interval.start, to: report.interval.end), options: options)
         case .json:
@@ -78,14 +82,21 @@ enum ReportExport {
         var day = Date.ISO8601FormatStyle().year().month().day()
         day.timeZone = .current
         let suffix = format == .pngLandscape ? "-wide" : ""
+        if report.rolling {
+            // "PowerBoard-last-day-2026-10-12-1620": the period ending at the time the report was made.
+            var time = Date.ISO8601FormatStyle().year().month().day().time(includingFractionalSeconds: false)
+            time.timeZone = .current
+            let end = report.interval.end.formatted(time).replacingOccurrences(of: ":", with: "").replacingOccurrences(of: "T", with: "-")
+            return "\(name)-last-\(report.period.rawValue)-\(end.prefix(15))\(suffix).\(format.fileExtension)"
+        }
         return "\(name)-\(report.period.rawValue)-\(report.interval.start.formatted(day))\(suffix).\(format.fileExtension)"
     }
 
     struct RenderError: Error {}
 
-    /// Lays the view out at half the pixel size and renders at 2x, so text has normal proportions.
-    private static func png(_ view: some View, width: CGFloat, height: CGFloat) throws -> Data {
-        let renderer = ImageRenderer(content: view.frame(width: width / 2, height: height / 2).environment(\.colorScheme, .light))
+    /// Renders the page at 2x (A4 portrait is 1190 x 1684 pixels), the same layout as the PDF.
+    private static func png(_ canvas: ReportCanvas) throws -> Data {
+        let renderer = ImageRenderer(content: canvas)
         renderer.scale = 2
         guard let image = renderer.cgImage,
               let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
@@ -94,122 +105,170 @@ enum ReportExport {
     }
 
     /// One A4 page (595 x 842 pt).
-    private static func pdf(_ view: some View) throws -> Data {
-        let size = CGSize(width: 595, height: 842)
-        let renderer = ImageRenderer(content: view.frame(width: size.width, height: size.height).environment(\.colorScheme, .light))
+    private static func pdf(_ pages: [AnyView], size: CGSize) throws -> Data {
         let data = NSMutableData()
         var box = CGRect(origin: .zero, size: size)
         guard let consumer = CGDataConsumer(data: data as CFMutableData),
               let context = CGContext(consumer: consumer, mediaBox: &box, nil)
         else { throw RenderError() }
-        renderer.render { _, draw in
-            context.beginPDFPage(nil)
-            draw(context)
-            context.endPDFPage()
+        for page in pages {
+            ImageRenderer(content: page).render { _, draw in
+                context.beginPDFPage(nil)
+                draw(context)
+                context.endPDFPage()
+            }
         }
         context.closePDF()
         return data as Data
     }
 }
 
-/// Share card for PNG export: 1080 x 1350 portrait or 1600 x 900 landscape.
-struct ShareCardView: View {
-    let report: Report
-    let strings: ReportStrings
-    let landscape: Bool
-
-    var body: some View {
-        let header = VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 10) {
-                IconBadge(Icons.lightning, color: Palette.energy, size: 24)
-                Text(verbatim: AppIdentity.displayName).font(.headline)
-            }
-            Text(verbatim: "\(strings(.title(report.period))) \(strings.periodLabel(report.period, report.interval))")
-                .font(.title3)
-                .foregroundStyle(.secondary)
-            Text(verbatim: strings(.headline)).font(.title2.weight(.semibold)).padding(.top, 8)
-        }
-        Group {
-            if landscape {
-                HStack(alignment: .top, spacing: 28) {
-                    VStack(alignment: .leading, spacing: 24) {
-                        header
-                        ReportSummaryView(report: report, strings: strings, large: true)
-                        Spacer()
-                        ReportFooter(strings: strings)
-                    }
-                    .frame(width: 330, alignment: .leading)
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text(verbatim: strings(.trend)).font(.title3.weight(.semibold))
-                        ReportTrendChart(report: report, strings: strings)
-                        ReportBreakdownTable(kind: .tool, items: report.bySource, strings: strings, maxRows: 3)
-                    }
-                }
-            } else {
-                VStack(alignment: .leading, spacing: 18) {
-                    header
-                    ReportSummaryView(report: report, strings: strings, large: true)
-                    Text(verbatim: strings(.trend)).font(.title3.weight(.semibold))
-                    ReportTrendChart(report: report, strings: strings).frame(height: 170)
-                    ReportBreakdownTable(kind: .tool, items: report.bySource, strings: strings, maxRows: 3)
-                    Spacer()
-                    ReportFooter(strings: strings)
-                }
-            }
-        }
-        .padding(36)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color.white)
-        .foregroundStyle(Color.black)
-    }
-}
-
-/// Full report on one A4 page for PDF export, with charts and a short method summary.
-struct ReportDocumentView: View {
+/// The exported report. PDF and portrait PNG render this same view on an A4 page, so they match;
+/// landscape PNG uses the same parts on an A4 landscape page. Every export carries the app icon and name.
+struct ReportCanvas: View {
     let report: Report
     let strings: ReportStrings
     let hideProjects: Bool
+    var landscape = false
+
+    /// A4 in points.
+    static let portraitSize = CGSize(width: 595, height: 842)
+    static let landscapeSize = CGSize(width: 842, height: 595)
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: "\(AppIdentity.displayName)  \(strings(.title(report.period)))").font(.title3.weight(.semibold))
-                Text(verbatim: strings.periodLabel(report.period, report.interval)).foregroundStyle(.secondary)
-            }
+        VStack(alignment: .leading, spacing: 12) {
+            ReportBrandHeader(report: report, strings: strings, iconSize: 34)
+            Divider()
             if report.isEmpty {
-                Text(verbatim: strings(.noUsage))
+                Text(verbatim: strings(.noUsage)).foregroundStyle(.secondary)
+            } else if landscape {
+                landscapeBody
             } else {
-                Text(verbatim: strings(.energy)).font(.caption).foregroundStyle(.secondary)
-                ReportSummaryView(report: report, strings: strings)
-                section(strings(.trend)) { ReportTrendChart(report: report, strings: strings).frame(height: 140) }
-                section(strings(.byTool)) { ReportBreakdownTable(kind: .tool, items: report.bySource, strings: strings, maxRows: 3) }
-                section(strings(.byModel)) { ReportBreakdownTable(kind: .model, items: report.byModel, strings: strings, maxRows: 4) }
-                section(strings(.byProject)) {
-                    ReportBreakdownTable(kind: .project, items: report.byProject, strings: strings, maxRows: 4, hideProjects: hideProjects)
-                }
-                section(strings(.method)) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        ForEach(report.gridIntensities, id: \.self) { Text(verbatim: strings(.gridBasis(String(format: "%.0f", $0)))) }
-                        ForEach(report.factorVersions, id: \.self) { Text(verbatim: strings(.factorVersion($0))) }
-                    }
-                    .font(.caption)
-                }
+                portraitBody
             }
             Spacer(minLength: 0)
             ReportFooter(strings: strings)
         }
         .font(.callout)
-        .padding(36)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(28)
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
         .background(Color.white)
         .foregroundStyle(Color.black)
+        .environment(\.colorScheme, .light)
     }
 
-    private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+    var size: CGSize { landscape ? Self.landscapeSize : Self.portraitSize }
+
+    private var portraitBody: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            summary
+            charts(height: 84)
+            HStack(alignment: .top, spacing: 14) {
+                box(strings(.energyMix)) { mixView(donut: 84, columns: 2) }
+                if report.hasGridLevels {
+                    box(strings(.byGridLevel)) { ReportGridLevelView(report: report, strings: strings) }
+                        .frame(width: 190)
+                }
+            }
+            box(strings(.byTool)) { ReportBreakdownTable(kind: .tool, items: report.bySource, strings: strings, maxRows: 3) }
+                .font(.caption)
+        }
+    }
+
+    private var landscapeBody: some View {
+        HStack(alignment: .top, spacing: 18) {
+            VStack(alignment: .leading, spacing: 12) {
+                summary
+                box(strings(.energyMix)) { mixView(donut: 84, columns: 1) }
+            }
+            .frame(width: 340)
+            charts(height: 150)
+        }
+    }
+
+    private var summary: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(verbatim: title).font(.headline)
+            ReportSummaryView(report: report, strings: strings, compact: true)
+            ReportTokenLine(report: report, strings: strings)
+        }
+    }
+
+    /// Energy and tokens, each as bars and as a cumulative curve.
+    private func charts(height: CGFloat) -> some View {
+        Grid(horizontalSpacing: 14, verticalSpacing: 10) {
+            GridRow {
+                chartBox(strings(.energyChart), .energy, cumulative: false, height: height)
+                chartBox(strings(.energyCumulative), .energy, cumulative: true, height: height)
+            }
+            GridRow {
+                chartBox(strings(.tokenChart), .tokens, cumulative: false, height: height)
+                chartBox(strings(.tokenCumulative), .tokens, cumulative: true, height: height)
+            }
+        }
+    }
+
+    private func chartBox(_ title: String, _ metric: ReportUsageChart.Metric, cumulative: Bool, height: CGFloat) -> some View {
+        box(title) {
+            ReportUsageChart(report: report, strings: strings, metric: metric, cumulative: cumulative, compactAxis: landscape)
+                .font(.caption2)
+                .frame(height: height)
+        }
+    }
+
+    @ViewBuilder
+    private func mixView(donut: CGFloat, columns: Int) -> some View {
+        if let mix = report.energyMix {
+            ReportEnergyMixView(mix: mix, strings: strings, donut: donut, legendColumns: columns)
+        } else {
+            Text(verbatim: "–").foregroundStyle(.secondary)
+        }
+    }
+
+    fileprivate func box(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(verbatim: title).font(.subheadline.weight(.semibold))
             content()
         }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(Color.black.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+/// Second PDF page: model and project breakdowns and the calculation notes, with the same header and footer.
+struct ReportDetailsPage: View {
+    let report: Report
+    let strings: ReportStrings
+    let hideProjects: Bool
+
+    var body: some View {
+        let layout = ReportCanvas(report: report, strings: strings, hideProjects: hideProjects)
+        VStack(alignment: .leading, spacing: 12) {
+            ReportBrandHeader(report: report, strings: strings, iconSize: 34)
+            Divider()
+            layout.box(strings(.byModel)) { ReportBreakdownTable(kind: .model, items: report.byModel, strings: strings, maxRows: 10) }
+            layout.box(strings(.byProject)) {
+                ReportBreakdownTable(kind: .project, items: report.byProject, strings: strings, maxRows: 12, hideProjects: hideProjects)
+            }
+            layout.box(strings(.method)) {
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(report.gridIntensities, id: \.self) { Text(verbatim: strings(.gridBasis(String(format: "%.0f", $0)))) }
+                    ForEach(report.factorVersions, id: \.self) { Text(verbatim: strings(.factorVersion($0))) }
+                    if let mix = report.energyMix {
+                        Text(verbatim: strings(mix.basis == .period ? .mixBasisPeriod : .mixBasisRecent))
+                    }
+                }
+                .font(.caption)
+            }
+            Spacer(minLength: 0)
+            ReportFooter(strings: strings)
+        }
+        .font(.callout)
+        .padding(28)
+        .frame(width: ReportCanvas.portraitSize.width, height: ReportCanvas.portraitSize.height, alignment: .topLeading)
+        .background(Color.white)
+        .foregroundStyle(Color.black)
+        .environment(\.colorScheme, .light)
     }
 }
 

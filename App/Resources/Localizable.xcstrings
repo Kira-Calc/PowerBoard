@@ -4671,6 +4671,23 @@
         }
       }
     },
+    "reports.byGridLevel": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "By grid level"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按电网等级"
+          }
+        }
+      }
+    },
     "reports.byModel": {
       "extractionState": "manual",
       "localizations": {
@@ -4756,6 +4773,23 @@
         }
       }
     },
+    "reports.energyMix": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Energy mix (estimated)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "能源结构（估算）"
+          }
+        }
+      }
+    },
     "reports.export": {
       "extractionState": "manual",
       "localizations": {
@@ -4769,6 +4803,57 @@
           "stringUnit": {
             "state": "translated",
             "value": "导出"
+          }
+        }
+      }
+    },
+    "reports.mode.calendar": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calendar"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按日历"
+          }
+        }
+      }
+    },
+    "reports.mode.help": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calendar: the day, week, month or year. Up to now: the last 24 hours, 7 days, 30 days or 12 months."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按日历：自然日、周、月、年。截至此刻：过去 24 小时、7 天、30 天或 12 个月。"
+          }
+        }
+      }
+    },
+    "reports.mode.rolling": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Up to now"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "截至此刻"
           }
         }
       }

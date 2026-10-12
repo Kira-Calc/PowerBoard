@@ -53,8 +53,21 @@ public enum ReportExporter {
     // MARK: JSON
 
     private struct JSONExport: Encodable {
+        struct Mix: Encodable {
+            var cleanShare: Double
+            var basis: String
+            var whByGroup: [String: Double]
+
+            enum CodingKeys: String, CodingKey {
+                case cleanShare = "clean_share"
+                case basis
+                case whByGroup = "wh_mid_by_group"
+            }
+        }
+
         struct Summary: Encodable {
             var period: String
+            var rolling: Bool
             var start: Date
             var end: Date
             var events: Int
@@ -66,9 +79,13 @@ public enum ReportExporter {
             var bySource: [ReportBreakdownItem]
             var byModel: [ReportBreakdownItem]
             var byProject: [ReportBreakdownItem]
+            var energyMix: Mix?
+            var energyByGridLevel: [String: Double]
 
             enum CodingKeys: String, CodingKey {
-                case period, start, end, events, sessions, tokens
+                case period, rolling, start, end, events, sessions, tokens
+                case energyMix = "energy_mix"
+                case energyByGridLevel = "energy_wh_mid_by_grid_level"
                 case energyWh = "energy_wh"
                 case co2GMid = "co2_g_mid"
                 case previousEnergyWhMid = "previous_energy_wh_mid"
@@ -103,11 +120,16 @@ public enum ReportExporter {
             generatedAt: report.generatedAt,
             note: strings(.footer),
             summary: .init(
-                period: report.period.rawValue, start: report.interval.start, end: report.interval.end,
+                period: report.period.rawValue, rolling: report.rolling, start: report.interval.start, end: report.interval.end,
                 events: report.totals.eventCount, sessions: report.sessionCount,
                 tokens: Snapshot.Tokens(report.totals.tokens), energyWh: report.totals.energyWh,
                 co2GMid: report.totals.co2GramsMid, previousEnergyWhMid: report.previousTotals.energyWh.mid,
-                bySource: report.bySource, byModel: report.byModel, byProject: projects
+                bySource: report.bySource, byModel: report.byModel, byProject: projects,
+                energyMix: report.energyMix.map { mix in
+                    JSONExport.Mix(cleanShare: mix.cleanShare, basis: mix.basis.rawValue,
+                        whByGroup: Dictionary(uniqueKeysWithValues: mix.whByGroup.map { ($0.key.rawValue, $0.value) }))
+                },
+                energyByGridLevel: Dictionary(uniqueKeysWithValues: report.energyByGridLevel.map { ($0.key?.rawValue ?? "none", $0.value) })
             ),
             records: records
         )
@@ -126,7 +148,7 @@ public enum ReportExporter {
         let energy = ValueFormatting.energy(report.totals.energyWh)
         var lines: [String] = []
         let colon = options.language == .zh ? "：" : ": "
-        lines.append("# \(t(.title(report.period)))\(colon)\(t.periodLabel(report.period, report.interval, calendar: calendar))")
+        lines.append("# \(t.title(report))\(colon)\(t.periodLabel(report, calendar: calendar))")
         lines.append("")
         guard !report.isEmpty else {
             lines += [t(.noUsage), "", "---", "", t(.footer)]
@@ -174,6 +196,22 @@ public enum ReportExporter {
               report.byModel.map { [$0.key, t.sourceName($0.source), t.confidence($0.tierConfidence)] + values($0) })
         table(t(.byProject), [t(.project)] + columns,
               report.byProject.map { [names.name($0.key.isEmpty ? nil : $0.key) ?? t(.unknownProject)] + values($0) })
+
+        if let mix = report.energyMix {
+            let percent = { (share: Double) in String(format: "%.0f%%", share * 100) }
+            lines += ["", "## \(t(.energyMix))", "", "- \(t(.cleanShare))\(sep)\(percent(mix.cleanShare))"]
+            for group in FuelGroup.allCases where mix.share(group) >= 0.005 {
+                lines.append("- \(t(.fuel(group)))\(sep)\(percent(mix.share(group)))")
+            }
+            lines += ["", t(mix.basis == .period ? .mixBasisPeriod : .mixBasisRecent)]
+        }
+        if report.hasGridLevels {
+            lines += ["", "## \(t(.byGridLevel))", ""]
+            for level in [GridLevel.cleaner, .typical, .lessClean] {
+                lines.append("- \(t(.gridLevel(level)))\(sep)\(ValueFormatting.energy(wh: report.energyByGridLevel[level] ?? 0).text)")
+            }
+            lines.append("- \(t(.unrecordedLevel))\(sep)\(ValueFormatting.energy(wh: report.energyByGridLevel[nil] ?? 0).text)")
+        }
 
         lines += ["", "## \(t(.method))", ""]
         lines += report.gridIntensities.map { t(.gridBasis(String(format: "%.0f", $0))) }

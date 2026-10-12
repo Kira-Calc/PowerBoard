@@ -37,19 +37,35 @@ public enum ReportPeriod: String, Sendable, Hashable, CaseIterable, Codable {
 
     /// Trend buckets: hours of a day, days of a week or month, months of a year.
     public func trendBoundaries(_ interval: DateInterval, calendar: Calendar = .current) -> [Date] {
-        let step: Calendar.Component = switch self {
-        case .day: .hour
-        case .week, .month: .day
-        case .year: .month
-        }
         var dates: [Date] = []
         var cursor = interval.start
         while cursor < interval.end {
             dates.append(cursor)
-            guard let next = calendar.date(byAdding: step, value: 1, to: cursor), next > cursor else { break }
+            // The next calendar boundary, so a rolling period that starts mid-hour has a short first bucket
+            // and whole hours (days, months) after it.
+            guard let next = calendar.dateInterval(of: trendStep, for: cursor)?.end, next > cursor else { break }
             cursor = next
         }
         return dates + [interval.end]
+    }
+
+    var trendStep: Calendar.Component {
+        switch self {
+        case .day: .hour
+        case .week, .month: .day
+        case .year: .month
+        }
+    }
+
+    /// The rolling period that ends at `end`: the last 24 hours, 7 days, 30 days or 12 months.
+    public func rollingInterval(endingAt end: Date, calendar: Calendar = .current) -> DateInterval {
+        let start: Date? = switch self {
+        case .day: calendar.date(byAdding: .hour, value: -24, to: end)
+        case .week: calendar.date(byAdding: .day, value: -7, to: end)
+        case .month: calendar.date(byAdding: .day, value: -30, to: end)
+        case .year: calendar.date(byAdding: .month, value: -12, to: end)
+        }
+        return DateInterval(start: start ?? end, end: end)
     }
 }
 
@@ -67,6 +83,8 @@ public struct ReportBreakdownItem: Sendable, Hashable, Codable {
 /// Everything shown in a report and written by the exporters.
 public struct Report: Sendable, Hashable {
     public var period: ReportPeriod
+    /// True for "the last 24 hours" and so on, ending when the report was made; false for calendar periods.
+    public var rolling: Bool
     public var interval: DateInterval
     public var generatedAt: Date
     public var totals: UsageTotals
@@ -82,6 +100,13 @@ public struct Report: Sendable, Hashable {
     /// Grid intensity values used by the records (usually one).
     public var gridIntensities: [Double]
     public var factorVersions: [String]
+    /// Estimated generation behind the energy (EIA, no account). Nil when no grid data has loaded.
+    public var energyMix: ReportEnergyMix?
+    /// Mid energy per grid level saved with the records (WattTime). Records without a level use the nil key.
+    public var energyByGridLevel: [GridLevel?: Double]
+
+    /// True when some energy has a recorded grid level, so the level breakdown says something.
+    public var hasGridLevels: Bool { energyByGridLevel.contains { $0.key != nil && $0.value > 0 } }
 
     /// Change of mid energy compared with the previous period, or nil when the previous period had none.
     public var energyChange: Double? {
@@ -125,15 +150,26 @@ public struct YearSummary: Sendable, Hashable {
 }
 
 public enum ReportBuilder {
+    /// The interval a report covers: the calendar period containing `date`, or the rolling period ending `now`.
+    public static func interval(period: ReportPeriod, rolling: Bool, containing date: Date, calendar: Calendar = .current,
+                                now: Date = Date()) -> DateInterval {
+        rolling ? period.rollingInterval(endingAt: now, calendar: calendar) : period.interval(containing: date, calendar: calendar)
+    }
+
     public static func build(
         store: UsageStore,
         period: ReportPeriod,
         containing date: Date,
+        rolling: Bool = false,
+        energyMixes: [GridProvider: EnergyMix] = [:],
         calendar: Calendar = .current,
         now: Date = Date()
     ) throws -> Report {
-        let interval = period.interval(containing: date, calendar: calendar)
-        let previous = period.shifted(interval, by: -1, calendar: calendar)
+        let interval = interval(period: period, rolling: rolling, containing: date, calendar: calendar, now: now)
+        // The previous period has the same length and ends where this one starts.
+        let previous = rolling
+            ? DateInterval(start: interval.start.addingTimeInterval(-interval.duration), end: interval.start)
+            : period.shifted(interval, by: -1, calendar: calendar)
         let totals = try store.totals(from: interval.start, to: interval.end)
         let trend = try store.series(boundaries: period.trendBoundaries(interval, calendar: calendar), includeLocal: false)
 
@@ -150,6 +186,7 @@ public enum ReportBuilder {
 
         return Report(
             period: period,
+            rolling: rolling,
             interval: interval,
             generatedAt: now,
             totals: totals,
@@ -161,7 +198,11 @@ public enum ReportBuilder {
             peak: trend.filter { $0.serverWh > 0 }.max { $0.serverWh < $1.serverWh },
             sessionCount: sessions.count,
             gridIntensities: context.grids,
-            factorVersions: context.versions
+            factorVersions: context.versions,
+            energyMix: ReportEnergyMix.combine(energyBySource: Dictionary(uniqueKeysWithValues: bySource.compactMap { item in
+                item.source.map { ($0, item.energyWh.mid) }
+            }), mixes: energyMixes),
+            energyByGridLevel: try store.energyByGridLevel(from: interval.start, to: interval.end)
         )
     }
 

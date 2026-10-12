@@ -33,7 +33,8 @@ All numbers are estimates with a wide range. See [docs/METHODOLOGY.md](docs/METH
 - **Popover:** energy, carbon, tokens, everyday comparisons that rotate (each with a cited source), active conversations (click one to bring its terminal to the front), and per-tool totals.
 - **Dashboard:** live overview with charts by tool, reports (day, week, month, year, year in review), per-record details, grid cleanliness, and settings.
 - **Claude Code status line:** today's energy and carbon at the bottom of Claude Code, through the bundled `powerboard` command.
-- **Exports:** CSV, JSON, Markdown, PNG and PDF, by hand or automatically into a folder.
+- **Reports:** a calendar day, week, month or year, or the period up to now (the last 24 hours, 7 days, 30 days or 12 months), with energy, carbon and token totals, bar and cumulative charts for energy and tokens, and an estimated energy mix (generation sources and fossil-free share).
+- **Exports:** CSV, JSON, Markdown, PNG and PDF, by hand or automatically into a folder. The first PDF page and the image are the same layout, both with the PowerBoard icon and name.
 
 Not covered: chats in claude.ai or the Claude desktop app. They write no local token logs.
 

@@ -151,6 +151,15 @@ final class GridCoordinator {
     init(model: AppModel, ingest: IngestCoordinator) {
         self.model = model
         self.ingest = ingest
+        model.energyMixProvider = { [weak self] interval in await self?.energyMixes(for: interval) ?? [:] }
+    }
+
+    /// Generation mix per provider for a report. Uses its own service when grid refresh has not started yet.
+    func energyMixes(for interval: DateInterval) async -> [GridProvider: EnergyMix] {
+        if let service { return await service.energyMixes(for: interval) }
+        guard let table = try? GridRegionTable.bundled() else { return [:] }
+        return await GridService(table: table, configuration: GridService.Configuration(watttime: nil, electricityMapsKey: nil, thresholds: settings.thresholds),
+                                 regions: [:]).energyMixes(for: interval)
     }
 
     func start() {

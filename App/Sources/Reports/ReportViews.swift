@@ -1,3 +1,4 @@
+import AppKit
 import Charts
 import ElectricityCore
 import SwiftUI
@@ -16,21 +17,23 @@ struct ReportSummaryView: View {
     let report: Report
     let strings: ReportStrings
     var large = false
+    /// Smaller type for exported pages.
+    var compact = false
 
     var body: some View {
         let energy = ValueFormatting.energy(report.totals.energyWh)
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(verbatim: strings(.about))
-                    .font(.system(size: large ? 26 : 22, weight: .medium))
+                    .font(.system(size: large ? 26 : compact ? 18 : 22, weight: .medium))
                     .foregroundStyle(.secondary)
                 RollingText(energy.mid.text)
-                    .font(.system(size: large ? 48 : 38, weight: .semibold))
+                    .font(.system(size: large ? 48 : compact ? 30 : 38, weight: .semibold))
             }
             Text(verbatim: "\(strings(.range)) \(energy.low.text) – \(energy.high.text)")
                 .font(.callout)
                 .foregroundStyle(.secondary)
-            HStack(alignment: .top, spacing: large ? 24 : 28) {
+            HStack(alignment: .top, spacing: large ? 24 : compact ? 18 : 28) {
                 metric(strings(.carbon), "\(ValueFormatting.carbon(grams: report.totals.co2GramsMid).text) \(Units.co2e)")
                 metric(strings(.tokens), ValueFormatting.tokens(report.totals.tokens.total))
                 metric(strings(.sessions), "\(report.sessionCount)")
@@ -48,82 +51,10 @@ struct ReportSummaryView: View {
     private func metric(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(verbatim: title).font(.caption).foregroundStyle(.secondary)
-            RollingText(value).font(large ? .title2.weight(.semibold) : .title3.weight(.semibold))
+            RollingText(value).font(large ? .title2.weight(.semibold) : compact ? .headline : .title3.weight(.semibold))
+                .lineLimit(1)
+                .fixedSize()
         }
-    }
-}
-
-/// Energy per trend bucket, stacked by tool.
-struct ReportTrendChart: View {
-    let report: Report
-    let strings: ReportStrings
-
-    private struct Point: Identifiable {
-        var id: String
-        var x: Date
-        var wh: Double
-        var tool: String
-    }
-
-    var body: some View {
-        let points = report.trend.flatMap { bucket in
-            UsageSource.allCases.compactMap { source -> Point? in
-                guard let wh = bucket.serverWhBySource[source], wh > 0 else { return nil }
-                return Point(id: "\(source.rawValue)-\(bucket.start.timeIntervalSince1970)", x: bucket.start, wh: wh, tool: strings.sourceName(source))
-            }
-        }
-        let used = UsageSource.allCases.filter { source in report.trend.contains { ($0.serverWhBySource[source] ?? 0) > 0 } }
-        Chart(points) { point in
-            BarMark(x: .value("Time", point.x, unit: unit), y: .value("Wh", point.wh))
-                .foregroundStyle(by: .value("Tool", point.tool))
-                .cornerRadius(2)
-        }
-        .chartForegroundStyleScale(domain: used.map(strings.sourceName), range: used.map(Palette.source))
-        .chartXScale(domain: (report.trend.first?.start ?? report.interval.start)...(report.trend.last?.end ?? report.interval.end))
-        .chartYAxis {
-            AxisMarks(position: .trailing) { value in
-                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 3]))
-                AxisValueLabel {
-                    if let wh = value.as(Double.self) { Text(ValueFormatting.energy(wh: wh).text).monospacedDigit() }
-                }
-            }
-        }
-        .chartXAxis {
-            AxisMarks(values: axisValues) { _ in
-                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 3]))
-                AxisValueLabel(format: axisFormat)
-            }
-        }
-        .chartLegend(position: .bottom, alignment: .leading)
-        .environment(\.locale, strings.locale)
-    }
-
-    private var unit: Calendar.Component {
-        switch report.period {
-        case .day: .hour
-        case .week, .month: .day
-        case .year: .month
-        }
-    }
-
-    private var axisValues: AxisMarkValues {
-        switch report.period {
-        case .day: .stride(by: .hour, count: 3)
-        case .week: .stride(by: .day, count: 1)
-        case .month: .stride(by: .day, count: 5)
-        case .year: .stride(by: .month, count: 1)
-        }
-    }
-
-    /// Axis labels in the report's language, which may differ from the system language in exports.
-    private var axisFormat: Date.FormatStyle {
-        let style: Date.FormatStyle = switch report.period {
-        case .day: .dateTime.hour()
-        case .week: .dateTime.weekday(.abbreviated)
-        case .month: .dateTime.day()
-        case .year: .dateTime.month(.narrow)
-        }
-        return style.locale(strings.locale)
     }
 }
 
@@ -196,5 +127,270 @@ struct ReportFooter: View {
         Text(verbatim: strings(.footer))
             .font(.caption)
             .foregroundStyle(.secondary)
+    }
+}
+
+/// Brand line for exported reports: app icon and name, then the report title and period.
+struct ReportBrandHeader: View {
+    let report: Report
+    let strings: ReportStrings
+    var iconSize: CGFloat = 36
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .frame(width: iconSize, height: iconSize)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(verbatim: AppIdentity.displayName).font(.headline)
+                Text(verbatim: strings.title(report)).font(.subheadline).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text(verbatim: strings.periodLabel(report))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+        }
+    }
+}
+
+/// Token counts by kind, in one line under the summary.
+struct ReportTokenLine: View {
+    let report: Report
+    let strings: ReportStrings
+
+    var body: some View {
+        let tokens = report.totals.tokens
+        let separator = strings.language == .zh ? "　" : "   "
+        Text(verbatim: [
+            "\(strings(.input)) \(ValueFormatting.tokens(tokens.inputUncached))",
+            "\(strings(.output)) \(ValueFormatting.tokens(tokens.output))",
+            "\(strings(.cacheWrite)) \(ValueFormatting.tokens(tokens.cacheWrite))",
+            "\(strings(.cacheRead)) \(ValueFormatting.tokens(tokens.cacheRead))",
+        ].joined(separator: separator))
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .monospacedDigit()
+    }
+}
+
+/// Energy or tokens over the report period: bars per bucket stacked by tool, or a cumulative curve.
+struct ReportUsageChart: View {
+    enum Metric { case energy, tokens }
+
+    let report: Report
+    let strings: ReportStrings
+    let metric: Metric
+    let cumulative: Bool
+    /// Fewer axis labels, for narrow charts on exported pages.
+    var compactAxis = false
+
+    private struct Point: Identifiable {
+        var id: String
+        var x: Date
+        var value: Double
+        var tool: String
+    }
+
+    private func value(_ bucket: SeriesBucket, _ source: UsageSource) -> Double {
+        metric == .energy ? bucket.serverWhBySource[source] ?? 0 : Double(bucket.tokensBySource[source]?.total ?? 0)
+    }
+
+    private func total(_ bucket: SeriesBucket) -> Double {
+        metric == .energy ? bucket.serverWh : Double(bucket.tokens.total)
+    }
+
+    private var sources: [UsageSource] {
+        UsageSource.allCases.filter { source in report.trend.contains { value($0, source) > 0 } }
+    }
+
+    private var color: Color { metric == .energy ? Palette.energy : Palette.tokens }
+
+    var body: some View {
+        if cumulative { axes(cumulativeChart) } else { axes(barChart) }
+    }
+
+    private var barChart: some View {
+        let points = report.trend.flatMap { bucket in
+            sources.compactMap { source -> Point? in
+                let v = value(bucket, source)
+                return v > 0 ? Point(id: "\(source.rawValue)-\(bucket.start.timeIntervalSince1970)", x: bucket.start, value: v,
+                                     tool: strings.sourceName(source)) : nil
+            }
+        }
+        return Chart(points) { point in
+            BarMark(x: .value("Time", point.x, unit: unit), y: .value("Value", point.value))
+                .foregroundStyle(by: .value("Tool", point.tool))
+                .cornerRadius(1.5)
+        }
+        .chartForegroundStyleScale(domain: sources.map(strings.sourceName), range: sources.map(Palette.source))
+        .chartLegend(sources.count > 1 ? .visible : .hidden)
+        .chartLegend(position: .top, alignment: .trailing)
+    }
+
+    private var cumulativeChart: some View {
+        var running = 0.0
+        let points = [Point(id: "start", x: report.interval.start, value: 0, tool: "")] + report.trend.map { bucket in
+            running += total(bucket)
+            return Point(id: "\(bucket.end.timeIntervalSince1970)", x: bucket.end, value: running, tool: "")
+        }
+        return Chart(points) { point in
+            // A flat fill: PDF output does not keep the transparency of gradients.
+            AreaMark(x: .value("Time", point.x), y: .value("Value", point.value))
+                .foregroundStyle(color.opacity(0.15))
+                .interpolationMethod(.monotone)
+            LineMark(x: .value("Time", point.x), y: .value("Value", point.value))
+                .foregroundStyle(color)
+                .lineStyle(StrokeStyle(lineWidth: 2))
+                .interpolationMethod(.monotone)
+        }
+    }
+
+    private func axes(_ chart: some View) -> some View {
+        chart
+            .chartXScale(domain: report.interval.start...report.interval.end)
+            .chartYAxis {
+                AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { value in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 3]))
+                    AxisValueLabel {
+                        if let number = value.as(Double.self) { Text(verbatim: label(number)).monospacedDigit() }
+                    }
+                }
+            }
+            .chartXAxis {
+                AxisMarks(values: axisValues) { value in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 3]))
+                    // A label at the very end of the period would be cut off at the edge.
+                    if let date = value.as(Date.self), report.interval.end.timeIntervalSince(date) > report.interval.duration * 0.06 {
+                        AxisValueLabel(format: axisFormat)
+                    }
+                }
+            }
+            .environment(\.locale, strings.locale)
+    }
+
+    private func label(_ number: Double) -> String {
+        if number == 0 { return "0" }
+        return metric == .energy ? ValueFormatting.energy(wh: number).text : ValueFormatting.tokens(Int(number))
+    }
+
+    private var unit: Calendar.Component {
+        switch report.period {
+        case .day: .hour
+        case .week, .month: .day
+        case .year: .month
+        }
+    }
+
+    private var axisValues: AxisMarkValues {
+        switch report.period {
+        case .day: .stride(by: .hour, count: compactAxis ? 8 : 6)
+        case .week: .stride(by: .day, count: compactAxis ? 2 : 1)
+        case .month: .stride(by: .day, count: compactAxis ? 10 : 7)
+        case .year: .stride(by: .month, count: compactAxis ? 3 : 2)
+        }
+    }
+
+    private var axisFormat: Date.FormatStyle {
+        let style: Date.FormatStyle = switch report.period {
+        case .day: .dateTime.hour()
+        case .week: .dateTime.weekday(.abbreviated)
+        case .month: .dateTime.month(.defaultDigits).day()
+        case .year: .dateTime.month(.abbreviated)
+        }
+        return style.locale(strings.locale)
+    }
+}
+
+/// Estimated generation behind the energy: a donut with the fossil-free share in the middle, and a legend.
+struct ReportEnergyMixView: View {
+    let mix: ReportEnergyMix
+    let strings: ReportStrings
+    var donut: CGFloat = 110
+    /// Legend columns; two keep the block short on exported pages.
+    var legendColumns = 1
+
+    private var groups: [FuelGroup] { FuelGroup.allCases.filter { mix.share($0) >= 0.005 } }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 18) {
+                ZStack {
+                    Chart(groups, id: \.self) { group in
+                        SectorMark(angle: .value("Wh", mix.whByGroup[group] ?? 0), innerRadius: .ratio(0.64), angularInset: 1)
+                            .foregroundStyle(Palette.fuel(group))
+                    }
+                    .chartLegend(.hidden)
+                    VStack(spacing: 0) {
+                        Text(verbatim: percent(mix.cleanShare)).font(.title3.weight(.semibold)).monospacedDigit()
+                        Text(verbatim: strings(.cleanShare)).font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
+                .frame(width: donut, height: donut)
+                let rows = stride(from: 0, to: groups.count, by: legendColumns).map { Array(groups[$0..<min($0 + legendColumns, groups.count)]) }
+                Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 4) {
+                    ForEach(rows, id: \.self) { row in
+                        GridRow {
+                            ForEach(row, id: \.self) { group in
+                                Circle().fill(Palette.fuel(group)).frame(width: 8, height: 8)
+                                Text(verbatim: strings(.fuel(group)))
+                                Text(verbatim: percent(mix.share(group))).monospacedDigit().foregroundStyle(.secondary)
+                                    .gridColumnAlignment(.trailing)
+                                    .padding(.trailing, legendColumns > 1 ? 10 : 0)
+                            }
+                        }
+                    }
+                }
+                .font(.callout)
+            }
+            Text(verbatim: strings(mix.basis == .period ? .mixBasisPeriod : .mixBasisRecent))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func percent(_ share: Double) -> String { String(format: "%.0f%%", share * 100) }
+}
+
+/// Energy by the grid level saved with each record (WattTime).
+struct ReportGridLevelView: View {
+    let report: Report
+    let strings: ReportStrings
+
+    private let levels: [GridLevel?] = [.cleaner, .typical, .lessClean, nil]
+
+    var body: some View {
+        let total = max(report.energyByGridLevel.values.reduce(0, +), 0.000_001)
+        VStack(alignment: .leading, spacing: 8) {
+            GeometryReader { proxy in
+                HStack(spacing: 2) {
+                    ForEach(levels, id: \.self) { level in
+                        let wh = report.energyByGridLevel[level] ?? 0
+                        if wh > 0 {
+                            Rectangle()
+                                .fill(level == nil ? Color.secondary.opacity(0.25) : GridText.color(level))
+                                .frame(width: max(2, proxy.size.width * wh / total))
+                        }
+                    }
+                }
+                .clipShape(Capsule())
+            }
+            .frame(height: 10)
+            Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 4) {
+                ForEach(levels, id: \.self) { level in
+                    GridRow {
+                        Circle().fill(level == nil ? Color.secondary.opacity(0.4) : GridText.color(level)).frame(width: 8, height: 8)
+                        Text(verbatim: level.map { strings(.gridLevel($0)) } ?? strings(.unrecordedLevel))
+                        Text(verbatim: ValueFormatting.energy(wh: report.energyByGridLevel[level] ?? 0).text)
+                            .monospacedDigit().foregroundStyle(.secondary).gridColumnAlignment(.trailing)
+                    }
+                }
+            }
+            .font(.callout)
+        }
+        .accessibilityElement(children: .combine)
     }
 }

@@ -151,6 +151,9 @@ struct Report: ParsableCommand {
     @Option(help: "day, week, month or year.")
     var period: ReportPeriod = .day
 
+    @Flag(help: "The period ending now instead of the calendar period: the last 24 hours, 7 days, 30 days or 12 months.")
+    var rolling = false
+
     @Option(help: "A date inside the period, YYYY-MM-DD. Default: today.")
     var date: String?
 
@@ -178,7 +181,8 @@ struct Report: ParsableCommand {
             return
         }
         let store = try UsageStore(url: AppPaths.database)
-        let report = try ReportBuilder.build(store: store, period: period, containing: day)
+        // The CLI has no grid data, so reports from here have no energy mix.
+        let report = try ReportBuilder.build(store: store, period: period, containing: day, rolling: rolling)
         let options = ExportOptions(language: lang ?? SharedSettings.language ?? .en, hideProjects: hideProjects)
         switch format {
         case .md:

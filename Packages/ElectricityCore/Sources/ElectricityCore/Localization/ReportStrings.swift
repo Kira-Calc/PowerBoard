@@ -26,6 +26,10 @@ public struct ReportStrings: Sendable {
         case noUsage, hiddenProject, unknownProject, method, footer
         case gridBasis(String), factorVersion(String)
         case trend, about, generated(String), headline, previousPeriod
+        case rollingTitle(ReportPeriod)
+        case energyChart, energyCumulative, tokenChart, tokenCumulative
+        case energyMix, cleanShare, mixBasisPeriod, mixBasisRecent, byGridLevel, unrecordedLevel
+        case fuel(FuelGroup), gridLevel(GridLevel)
 
         var english: String {
             switch self {
@@ -45,7 +49,7 @@ public struct ReportStrings: Sendable {
             case .output: "Output"
             case .cacheWrite: "Cache write"
             case .cacheRead: "Cache read"
-            case .comparedWithPrevious: "Compared with the previous period"
+            case .comparedWithPrevious: "vs. previous period"
             case .noPrevious: "No usage in the previous period"
             case .byTool: "By tool"
             case .byModel: "By model"
@@ -71,6 +75,40 @@ public struct ReportStrings: Sendable {
             case .generated(let value): "Generated \(value)"
             case .headline: "AI inference energy"
             case .previousPeriod: "Previous period"
+            case .rollingTitle(let period):
+                switch period {
+                case .day: "Last 24 hours"
+                case .week: "Last 7 days"
+                case .month: "Last 30 days"
+                case .year: "Last 12 months"
+                }
+            case .energyChart: "Energy"
+            case .energyCumulative: "Energy, cumulative"
+            case .tokenChart: "Tokens"
+            case .tokenCumulative: "Tokens, cumulative"
+            case .energyMix: "Energy mix (estimated)"
+            case .cleanShare: "Fossil-free"
+            case .mixBasisPeriod: "Generation mix of the likely data center regions over the same hours (US EIA), weighted by each tool's energy."
+            case .mixBasisRecent: "Some hours have no published data yet, so the average mix of about the last 30 days is used for them (US EIA)."
+            case .byGridLevel: "By grid level (WattTime)"
+            case .unrecordedLevel: "Not recorded"
+            case .fuel(let group):
+                switch group {
+                case .nuclear: "Nuclear"
+                case .wind: "Wind"
+                case .hydro: "Hydro"
+                case .solar: "Solar"
+                case .otherClean: "Geothermal"
+                case .gas: "Natural gas"
+                case .coal: "Coal"
+                case .other: "Other"
+                }
+            case .gridLevel(let level):
+                switch level {
+                case .cleaner: "Cleaner"
+                case .typical: "Typical"
+                case .lessClean: "Less clean"
+                }
             }
         }
 
@@ -118,6 +156,40 @@ public struct ReportStrings: Sendable {
             case .generated(let value): "生成于 \(value)"
             case .headline: "AI 推理耗电"
             case .previousPeriod: "上一期"
+            case .rollingTitle(let period):
+                switch period {
+                case .day: "过去 24 小时"
+                case .week: "过去 7 天"
+                case .month: "过去 30 天"
+                case .year: "过去 12 个月"
+                }
+            case .energyChart: "用电"
+            case .energyCumulative: "累计用电"
+            case .tokenChart: "Token"
+            case .tokenCumulative: "累计 Token"
+            case .energyMix: "能源结构（估算）"
+            case .cleanShare: "清洁电力"
+            case .mixBasisPeriod: "按可能的数据中心所在地区同一时段的发电结构（美国 EIA），以各工具的用电量加权估算。"
+            case .mixBasisRecent: "部分时段还没有已发布的数据，这些时段使用最近约 30 天的平均结构（美国 EIA）。"
+            case .byGridLevel: "按电网等级（WattTime）"
+            case .unrecordedLevel: "未记录"
+            case .fuel(let group):
+                switch group {
+                case .nuclear: "核电"
+                case .wind: "风电"
+                case .hydro: "水电"
+                case .solar: "太阳能"
+                case .otherClean: "地热"
+                case .gas: "燃气"
+                case .coal: "燃煤"
+                case .other: "其他"
+                }
+            case .gridLevel(let level):
+                switch level {
+                case .cleaner: "较清洁"
+                case .typical: "一般"
+                case .lessClean: "较不清洁"
+                }
             }
         }
     }
@@ -143,6 +215,23 @@ public struct ReportStrings: Sendable {
         case (.unmapped, .zh): "无对应系数"
         case (nil, _): "-"
         }
+    }
+
+    /// "Weekly report", or "Last 7 days" for a rolling report.
+    public func title(_ report: Report) -> String {
+        self(report.rolling ? .rollingTitle(report.period) : .title(report.period))
+    }
+
+    /// The period of a report: the calendar label, or start and end with times for a rolling report.
+    public func periodLabel(_ report: Report, calendar: Calendar = .current) -> String {
+        guard report.rolling else { return periodLabel(report.period, report.interval, calendar: calendar) }
+        var calendar = calendar
+        calendar.locale = locale
+        let base = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
+        let style = report.period == .day || report.period == .week
+            ? base.month(.abbreviated).day().hour().minute()
+            : base.year().month(.abbreviated).day()
+        return "\(report.interval.start.formatted(style)) – \(report.interval.end.formatted(style))"
     }
 
     /// "2026-10-12", "2026-10-12 to 2026-10-18", "2026-10", "2026".

@@ -31,6 +31,8 @@ public actor GridService {
     public private(set) var regions: [String: String]
     public private(set) var lastError: GridAPIError?
     private var recentMixes: [String: RecentFuelMix] = [:]
+    /// Hourly generation by group per balancing authority (about 33 days), for report energy mixes.
+    private var fuelHistories: [String: FuelHistory] = [:]
     private var recentMixFetched: [String: Date] = [:]
 
     public init(table: GridRegionTable, configuration: Configuration, regions: [String: String] = [:],
@@ -94,16 +96,54 @@ public actor GridService {
             recentMixFetched[ba] = now
             let transport = self.transport
             Task {
-                if let mix = try? await EIAFuelMixClient(transport: transport).recentMix(balancingAuthority: ba, now: now) {
-                    self.storeRecentMix(mix)
+                if let data = try? await EIAFuelMixClient(transport: transport).fuelData(balancingAuthority: ba, now: now) {
+                    self.storeFuelData(data)
                 }
             }
         }
         return recentMixes[ba]
     }
 
-    private func storeRecentMix(_ mix: RecentFuelMix) {
-        recentMixes[mix.balancingAuthority] = mix
+    /// Fetches the EIA history of any balancing authority not loaded yet, so a report made right after launch
+    /// still gets an energy mix. Failures leave that authority out.
+    private func loadMissingFuelHistories(now: Date) async {
+        let missing = Set(GridProvider.allCases.flatMap { table.candidates(for: $0) }.compactMap(\.eiaBalancingAuthority))
+            .filter { !$0.isEmpty && fuelHistories[$0] == nil }
+        guard !missing.isEmpty else { return }
+        let transport = self.transport
+        let results = await withTaskGroup(of: EIAFuelMixClient.FuelData?.self) { group in
+            for ba in missing {
+                group.addTask { try? await EIAFuelMixClient(transport: transport).fuelData(balancingAuthority: ba, now: now) }
+            }
+            var all: [EIAFuelMixClient.FuelData] = []
+            for await result in group { if let result { all.append(result) } }
+            return all
+        }
+        for data in results {
+            storeFuelData(data)
+            recentMixFetched[data.recent.balancingAuthority] = now
+        }
+    }
+
+    private func storeFuelData(_ data: EIAFuelMixClient.FuelData) {
+        recentMixes[data.recent.balancingAuthority] = data.recent
+        fuelHistories[data.recent.balancingAuthority] = data.history
+    }
+
+    /// Estimated generation mix behind each provider over `interval`: each candidate's balancing authority mix,
+    /// weighted like the grid level. Providers without EIA data yet are left out.
+    public func energyMixes(for interval: DateInterval, now: Date = Date()) async -> [GridProvider: EnergyMix] {
+        await loadMissingFuelHistories(now: now)
+        var result: [GridProvider: EnergyMix] = [:]
+        for provider in GridProvider.allCases {
+            let parts = table.candidates(for: provider).compactMap { candidate -> (mix: EnergyMix, weight: Double)? in
+                guard let ba = candidate.eiaBalancingAuthority, let history = fuelHistories[ba],
+                      let mix = EnergyMix.from(history, interval: interval) else { return nil }
+                return (mix, candidate.weight)
+            }
+            result[provider] = EnergyMix.weighted(parts)
+        }
+        return result
     }
 
     private func liveReading(for candidate: GridCandidate, now: Date) async -> CandidateReading {

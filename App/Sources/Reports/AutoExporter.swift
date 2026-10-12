@@ -78,7 +78,7 @@ final class AutoExporter {
     func start() {
         timer = Task { [weak self] in
             while !Task.isCancelled {
-                self?.check(now: Date())
+                await self?.check(now: Date())
                 try? await Task.sleep(for: .seconds(60))
             }
         }
@@ -88,7 +88,7 @@ final class AutoExporter {
         timer?.cancel()
     }
 
-    private func check(now: Date) {
+    private func check(now: Date) async {
         guard !settings.enabled.isEmpty, let store = model.store, let folder = settings.folderURL else { return }
         let calendar = Calendar.current
         let minutesNow = calendar.component(.hour, from: now) * 60 + calendar.component(.minute, from: now)
@@ -98,7 +98,8 @@ final class AutoExporter {
             let key = ISO8601DateFormatter().string(from: previous.start)
             guard settings.lastExported(period) != key else { continue }
             do {
-                let report = try ReportBuilder.build(store: store, period: period, containing: previous.start)
+                let mixes = await model.energyMixes(for: previous)
+                let report = try ReportBuilder.build(store: store, period: period, containing: previous.start, energyMixes: mixes)
                 let data = try ReportExport.data(settings.format, report: report, store: store,
                                                  strings: settings.language.strings, hideProjects: settings.hideProjects)
                 let accessing = folder.startAccessingSecurityScopedResource()

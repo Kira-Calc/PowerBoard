@@ -15,7 +15,17 @@ public struct EIAFuelMixClient: Sendable {
         self.transport = transport
     }
 
+    /// The latest published day and the hourly generation by group behind it (about 33 days).
+    public struct FuelData: Sendable {
+        public var recent: RecentFuelMix
+        public var history: FuelHistory
+    }
+
     public func recentMix(balancingAuthority: String, now: Date = Date()) async throws -> RecentFuelMix {
+        try await fuelData(balancingAuthority: balancingAuthority, now: now).recent
+    }
+
+    public func fuelData(balancingAuthority: String, now: Date = Date()) async throws -> FuelData {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(identifier: "UTC")
@@ -34,11 +44,15 @@ public struct EIAFuelMixClient: Sendable {
         ]
         let (data, response) = try await transport.send(URLRequest(url: components.url!))
         guard response.statusCode == 200 else { throw GridAPIError.http(response.statusCode, nil) }
-        return try Self.parse(data, balancingAuthority: balancingAuthority)
+        return try Self.parseAll(data, balancingAuthority: balancingAuthority)
+    }
+
+    static func parse(_ data: Data, balancingAuthority: String) throws -> RecentFuelMix {
+        try parseAll(data, balancingAuthority: balancingAuthority).recent
     }
 
     /// Fossil-free share of the latest 24 hours that have data, and its rank among the 30 days before it.
-    static func parse(_ data: Data, balancingAuthority: String) throws -> RecentFuelMix {
+    static func parseAll(_ data: Data, balancingAuthority: String) throws -> FuelData {
         guard let blocks = try JSONSerialization.jsonObject(with: data) as? [[String: Any]],
               let rows = blocks.first?["data"] as? [[String: Any]]
         else { throw GridAPIError.missingData }
@@ -48,6 +62,7 @@ public struct EIAFuelMixClient: Sendable {
         formatter.dateFormat = "MM/dd/yyyy HH:mm:ss"
 
         var byHour: [Date: (clean: Double, total: Double)] = [:]
+        var history: FuelHistory = [:]
         for row in rows {
             guard let fuel = row["FUEL_TYPE_ID"] as? String, !excludedFuels.contains(fuel),
                   let values = row["VALUES"] as? [String: Any],
@@ -59,6 +74,7 @@ public struct EIAFuelMixClient: Sendable {
                 hour.total += mwh
                 if cleanFuels.contains(fuel) { hour.clean += mwh }
                 byHour[date] = hour
+                if let group = FuelGroup(eiaFuel: fuel) { history[date, default: [:]][group, default: 0] += mwh }
             }
         }
         guard let latest = byHour.keys.max() else { throw GridAPIError.missingData }
@@ -73,7 +89,7 @@ public struct EIAFuelMixClient: Sendable {
         }
         guard let latestShare = share(day: 0) else { throw GridAPIError.missingData }
         let baseline = (1...RecentFuelMix.baselineDayCount).compactMap { share(day: $0) }
-        return RecentFuelMix(
+        let recent = RecentFuelMix(
             balancingAuthority: balancingAuthority,
             cleanShare: latestShare,
             start: latest.addingTimeInterval(-23 * 3600),
@@ -81,5 +97,6 @@ public struct EIAFuelMixClient: Sendable {
             percentile: RecentFuelMix.percentile(latest: latestShare, baseline: baseline),
             baselineDays: baseline.count
         )
+        return FuelData(recent: recent, history: history)
     }
 }

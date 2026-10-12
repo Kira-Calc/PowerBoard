@@ -12,6 +12,20 @@ enum Palette {
     static let local = Color.gray
     static let neutral = Color.gray
 
+    /// Generation sources in the energy mix: fossil-free ones in cool colors, fossil ones in warm or dark colors.
+    static func fuel(_ group: FuelGroup) -> Color {
+        switch group {
+        case .nuclear: .purple
+        case .wind: .teal
+        case .hydro: .blue
+        case .solar: .yellow
+        case .otherClean: .mint
+        case .gas: .orange
+        case .coal: Color(red: 0.36, green: 0.27, blue: 0.22)
+        case .other: .gray
+        }
+    }
+
     static func source(_ source: UsageSource) -> Color {
         switch source {
         case .claudeCode: .orange

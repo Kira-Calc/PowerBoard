@@ -84,6 +84,12 @@ Cleanliness is shown for information only. The app does not pause, delay or sche
 
 The grid level is saved with each new record (only for records less than 20 minutes old), so "today's energy by grid level" covers only usage after live data was connected. The carbon estimate always uses the fixed intensity above, not the grid level.
 
+### Energy mix in reports
+
+Reports estimate which generation sources supplied the energy. For each candidate location, the hourly generation by fuel of its balancing authority (US EIA, about the last 33 days) is summed over the report's hours; the provider mix is the weighted average of its candidates, and each tool's mid energy is split by its provider's mix. Fuels are grouped as nuclear, wind, hydro, solar, geothermal (fossil-free), natural gas, coal and other; battery output is excluded. Hours without published data, such as the latest few hours or anything older than the data kept, use the average mix of all kept hours, and the report says so. The mix is an estimate on top of estimated locations; it is not the provider's actual supply, which may include contracted renewable energy.
+
+Reports can cover a calendar period (day, week, month, year) or a rolling one ending at the time the report is made (the last 24 hours, 7 days, 30 days or 12 months). A rolling report compares with the period of the same length right before it.
+
 ### Local power
 
 When turned on, the app reads the whole Mac's power draw (`PowerTelemetryData.SystemLoad` from the battery controller) every 10 seconds while it runs and integrates it into Wh. Gaps longer than 60 seconds (sleep, app not running) are not filled in. Desktop Macs without this sensor cannot use the option. No carbon is estimated for local power, because the local grid is unknown.
@@ -209,6 +215,12 @@ App 只读取计数需要的字段（token 数、模型名、时间、会话 ID�
 - **可选：** 填入 Electricity Maps API 密钥后，补充实时碳强度和清洁电力占比。
 
 电网等级随每条新记录保存（只保存给 20 分钟以内的新记录），所以"今日用电按电网等级"只包含连接实时数据之后的用电。碳排估算始终使用上面的固定碳强度，不使用电网等级。
+
+### 报告中的能源结构
+
+报告会估算这些电量来自哪些发电来源。每个候选地点取其所属平衡区的逐小时分燃料发电量（美国 EIA，保留约最近 33 天），在报告时段内求和；服务商的结构是各候选地点按权重的加权平均，再把每个工具的电量中值按对应服务商的结构拆分。燃料分为核电、风电、水电、太阳能、地热（清洁电力）以及燃气、燃煤和其他，不计储能电池。没有已发布数据的时段（例如最近几个小时，或早于保留范围的时段）使用全部保留时段的平均结构，报告中会注明。这个结构建立在推测的地点之上，只是估算；它不是服务商实际的供电构成，服务商可能另有签约的可再生能源。
+
+报告可以按日历计算（自然日、周、月、年），也可以按截至生成时刻的滚动区间计算（过去 24 小时、7 天、30 天、12 个月）。滚动报告与紧挨在它之前、长度相同的区间比较。
 
 ### 本机耗电
 

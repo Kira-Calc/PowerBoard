@@ -58,6 +58,66 @@ import Testing
         #expect(report.gridIntensities == [287])
     }
 
+    @Test func rollingReportEndsNowAndComparesWithTheSameLengthBefore() throws {
+        // 16:20 on the 12th: the last 24 hours start at 16:20 on the 11th, so "a" (10:00 on the 11th) is in the
+        // previous 24 hours and b, c, d are in this one.
+        let now = utc("2026-10-12T16:20:00Z")
+        let report = try ReportBuilder.build(store: makeStore(), period: .day, containing: now, rolling: true, calendar: calendar, now: now)
+        #expect(report.rolling)
+        #expect(report.interval == DateInterval(start: utc("2026-10-11T16:20:00Z"), end: now))
+        #expect(report.totals.eventCount == 3)
+        #expect(report.previousTotals.eventCount == 1)
+        // A short first bucket (16:20 to 17:00), 23 whole hours, and a short last one (16:00 to 16:20).
+        #expect(report.trend.first?.start == utc("2026-10-11T16:20:00Z"))
+        #expect(report.trend.first?.end == utc("2026-10-11T17:00:00Z"))
+        #expect(report.trend.last?.end == now)
+        #expect(report.trend.count == 25)
+        let strings = ReportStrings(.en)
+        #expect(strings.title(report) == "Last 24 hours")
+        #expect(ReportExporter.markdown(report, options: ExportOptions(language: .zh), calendar: calendar).hasPrefix("# 过去 24 小时："))
+    }
+
+    @Test func rollingLengths() {
+        let now = utc("2026-10-12T16:20:00Z")
+        #expect(ReportPeriod.week.rollingInterval(endingAt: now, calendar: calendar).start == utc("2026-10-05T16:20:00Z"))
+        #expect(ReportPeriod.month.rollingInterval(endingAt: now, calendar: calendar).start == utc("2026-09-12T16:20:00Z"))
+        #expect(ReportPeriod.year.rollingInterval(endingAt: now, calendar: calendar).start == utc("2025-10-12T16:20:00Z"))
+    }
+
+    @Test func energyMixSplitsEachToolByItsProvider() throws {
+        let mixes: [GridProvider: EnergyMix] = [
+            .anthropic: EnergyMix(shares: [.nuclear: 0.5, .gas: 0.5], basis: .period, hours: 24),
+            .openai: EnergyMix(shares: [.wind: 1], basis: .recentAverage, hours: 24),
+        ]
+        let report = try ReportBuilder.build(store: makeStore(), period: .day, containing: utc("2026-10-12T12:00:00Z"),
+                                             energyMixes: mixes, calendar: calendar)
+        let mix = try #require(report.energyMix)
+        let claude = report.bySource.first { $0.source == .claudeCode }!.energyWh.mid
+        let codex = report.bySource.first { $0.source == .codex }!.energyWh.mid
+        #expect(abs((mix.whByGroup[.nuclear] ?? 0) - claude / 2) < 1e-9)
+        #expect(abs((mix.whByGroup[.wind] ?? 0) - codex) < 1e-9)
+        #expect(abs(mix.cleanShare - (claude / 2 + codex) / (claude + codex)) < 1e-9)
+        #expect(mix.basis == .recentAverage)
+        let markdown = ReportExporter.markdown(report, options: ExportOptions(language: .en), calendar: calendar)
+        #expect(markdown.contains("## Energy mix (estimated)"))
+        #expect(!report.hasGridLevels)
+    }
+
+    @Test func energyMixFromHistory() {
+        let hour = utc("2026-10-12T10:00:00Z")
+        let history: FuelHistory = [hour: [.coal: 30, .solar: 10], hour.addingTimeInterval(-86400 * 3): [.wind: 100]]
+        let inside = EnergyMix.from(history, interval: DateInterval(start: hour, duration: 3600))
+        #expect(inside?.basis == .period)
+        #expect(inside?.shares[.coal] == 0.75)
+        #expect(inside?.cleanShare == 0.25)
+        // No published hour inside: the whole history is used and marked as such.
+        let later = EnergyMix.from(history, interval: DateInterval(start: hour.addingTimeInterval(7200), duration: 3600))
+        #expect(later?.basis == .recentAverage)
+        #expect(abs((later?.shares[.wind] ?? 0) - 100.0 / 140) < 1e-9)
+        #expect(FuelGroup(eiaFuel: "BAT") == nil)
+        #expect(FuelGroup(eiaFuel: "SNB") == .solar)
+    }
+
     @Test func emptyPeriod() throws {
         let report = try ReportBuilder.build(store: makeStore(), period: .day, containing: utc("2026-01-01T12:00:00Z"), calendar: calendar)
         #expect(report.isEmpty)

@@ -70,10 +70,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // Development aid: `<App binary> -exportTest <folder>` writes this week's report in every format and
         // both languages, then quits. Used to check that each export opens correctly.
         if let folder = UserDefaults.standard.string(forKey: "exportTest"), let store = model.store {
+            Task { await runExportTest(folder: folder, store: store) }
+        }
+
+        // Development aid: `open <App> --args -openDashboard overview` opens a page at launch.
+        if let name = UserDefaults.standard.string(forKey: "openDashboard") {
+            openDashboard(section: DashboardSection(rawValue: name) ?? .overview)
+        }
+    }
+
+    /// Writes this week's report (or the last 7 days with `-exportTestRolling YES`) in every format and both languages.
+    private func runExportTest(folder: String, store: UsageStore) async {
             let url = URL(fileURLWithPath: folder)
             do {
                 try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-                let report = try ReportBuilder.build(store: store, period: .week, containing: Date())
+                let rolling = UserDefaults.standard.bool(forKey: "exportTestRolling")
+                let interval = ReportBuilder.interval(period: .week, rolling: rolling, containing: Date())
+                let mixes = await model.energyMixes(for: interval)
+                let report = try ReportBuilder.build(store: store, period: .week, containing: Date(), rolling: rolling, energyMixes: mixes)
                 for language in [ExportLanguage.chinese, .english] {
                     for format in ExportFormat.allCases {
                         let data = try ReportExport.data(format, report: report, store: store, strings: language.strings, hideProjects: false)
@@ -86,12 +100,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 print("Export test failed: \(error)")
             }
             NSApp.terminate(nil)
-        }
-
-        // Development aid: `open <App> --args -openDashboard overview` opens a page at launch.
-        if let name = UserDefaults.standard.string(forKey: "openDashboard") {
-            openDashboard(section: DashboardSection(rawValue: name) ?? .overview)
-        }
     }
 
     func openDashboard(section: DashboardSection?) {

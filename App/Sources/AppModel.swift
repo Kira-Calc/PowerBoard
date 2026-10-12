@@ -26,6 +26,12 @@ final class AppModel {
     /// Incremented whenever stored data changes, so pages reload their queries.
     var dataVersion = 0
     var sourceStatuses: [UsageSource: SourceStatus] = [:]
+    /// Estimated generation mix per provider over an interval, for reports. Set by the grid coordinator.
+    @ObservationIgnored var energyMixProvider: (@MainActor (DateInterval) async -> [GridProvider: EnergyMix])?
+
+    func energyMixes(for interval: DateInterval) async -> [GridProvider: EnergyMix] {
+        await energyMixProvider?(interval) ?? [:]
+    }
 
     /// Tools that have usage records. Lists in the UI show only these, so someone who uses one tool sees only that
     /// tool. Until the first records are read, every tool is listed.

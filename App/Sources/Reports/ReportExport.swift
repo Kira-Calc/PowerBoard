@@ -55,18 +55,26 @@ enum ExportLanguage: String, CaseIterable, Identifiable {
 /// Writes a report in any export format.
 @MainActor
 enum ReportExport {
-    static func data(_ format: ExportFormat, report: Report, store: UsageStore, strings: ReportStrings, hideProjects: Bool) throws -> Data {
+    /// The name shown after the report title on PNG and PDF exports, set in the export dialog. Empty means none.
+    static let authorKey = "export.author"
+
+    static var savedAuthor: String? {
+        UserDefaults.standard.string(forKey: authorKey).flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
+    }
+
+    static func data(_ format: ExportFormat, report: Report, store: UsageStore, strings: ReportStrings, hideProjects: Bool,
+                     author: String? = savedAuthor) throws -> Data {
         let options = ExportOptions(language: strings.language, hideProjects: hideProjects)
         switch format {
         case .pngPortrait:
-            return try png(ReportCanvas(report: report, strings: strings, hideProjects: hideProjects))
+            return try png(ReportCanvas(report: report, strings: strings, hideProjects: hideProjects, author: author))
         case .pngLandscape:
-            return try png(ReportCanvas(report: report, strings: strings, hideProjects: hideProjects, landscape: true))
+            return try png(ReportCanvas(report: report, strings: strings, hideProjects: hideProjects, author: author, landscape: true))
         case .pdf:
             // Page 1 is the same as the portrait image; page 2 has the model and project breakdowns and the method.
             return try pdf([
-                AnyView(ReportCanvas(report: report, strings: strings, hideProjects: hideProjects)),
-                AnyView(ReportDetailsPage(report: report, strings: strings, hideProjects: hideProjects)),
+                AnyView(ReportCanvas(report: report, strings: strings, hideProjects: hideProjects, author: author)),
+                AnyView(ReportDetailsPage(report: report, strings: strings, hideProjects: hideProjects, author: author)),
             ], size: ReportCanvas.portraitSize)
         case .csv:
             return ReportExporter.csv(try store.events(from: report.interval.start, to: report.interval.end), options: options)
@@ -129,6 +137,7 @@ struct ReportCanvas: View {
     let report: Report
     let strings: ReportStrings
     let hideProjects: Bool
+    var author: String?
     var landscape = false
 
     /// A4 in points.
@@ -137,7 +146,7 @@ struct ReportCanvas: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ReportBrandHeader(report: report, strings: strings, iconSize: 34)
+            ReportBrandHeader(report: report, strings: strings, iconSize: 34, author: author)
             Divider()
             if report.isEmpty {
                 Text(verbatim: strings(.noUsage)).foregroundStyle(.secondary)
@@ -164,12 +173,13 @@ struct ReportCanvas: View {
             summary
             charts(height: 84)
             HStack(alignment: .top, spacing: 14) {
-                box(strings(.energyMix)) { mixView(donut: 84, columns: 2) }
+                box(strings(.energyMix), fillHeight: true) { mixView(donut: 84, columns: 2) }
                 if report.hasGridLevels {
-                    box(strings(.byGridLevel)) { ReportGridLevelView(report: report, strings: strings) }
+                    box(strings(.byGridLevel), fillHeight: true) { ReportGridLevelView(report: report, strings: strings) }
                         .frame(width: 190)
                 }
             }
+            .fixedSize(horizontal: false, vertical: true)
             box(strings(.byTool)) { ReportBreakdownTable(kind: .tool, items: report.bySource, strings: strings, maxRows: 3) }
                 .font(.caption)
         }
@@ -224,13 +234,13 @@ struct ReportCanvas: View {
         }
     }
 
-    fileprivate func box(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+    fileprivate func box(_ title: String, fillHeight: Bool = false, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(verbatim: title).font(.subheadline.weight(.semibold))
             content()
         }
         .padding(10)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: fillHeight ? .infinity : nil, alignment: .topLeading)
         .background(Color.black.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
     }
 }
@@ -240,9 +250,10 @@ struct ReportDetailsPage: View {
     let report: Report
     let strings: ReportStrings
     let hideProjects: Bool
+    var author: String?
 
     var body: some View {
-        let layout = ReportCanvas(report: report, strings: strings, hideProjects: hideProjects)
+        let layout = ReportCanvas(report: report, strings: strings, hideProjects: hideProjects, author: author)
         VStack(alignment: .leading, spacing: 12) {
             ReportBrandHeader(report: report, strings: strings, iconSize: 34)
             Divider()
@@ -280,6 +291,7 @@ struct ExportSheet: View {
     @AppStorage("export.format") private var format: ExportFormat = .pdf
     @AppStorage("export.language") private var language: ExportLanguage = .app
     @AppStorage("export.hideProjects") private var hideProjects = false
+    @AppStorage(ReportExport.authorKey) private var author = ""
     @State private var errorText: String?
 
     var body: some View {
@@ -295,6 +307,7 @@ struct ExportSheet: View {
                     Text(verbatim: "English").tag(ExportLanguage.english)
                 }
                 Toggle("export.hideProjects", isOn: $hideProjects)
+                TextField("export.author", text: $author, prompt: Text("export.author.prompt"))
             }
             if let errorText {
                 Text(errorText).font(.caption).foregroundStyle(.orange)

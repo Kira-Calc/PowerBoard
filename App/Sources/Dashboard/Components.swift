@@ -19,6 +19,9 @@ struct PageContainer<Content: View>: View {
 
 /// A rounded panel used for cards on dashboard pages.
 struct Card<Content: View>: View {
+    /// Stretches to the height of the row, so cards side by side end at the same line.
+    /// Use inside a row with `.fixedSize(horizontal: false, vertical: true)`.
+    var fillHeight = false
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -26,7 +29,7 @@ struct Card<Content: View>: View {
             content
         }
         .padding(16)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: fillHeight ? .infinity : nil, alignment: .topLeading)
         .background(.background.secondary, in: RoundedRectangle(cornerRadius: 10))
     }
 }

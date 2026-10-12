@@ -145,7 +145,7 @@ struct ReportsPage: View {
             }
         }
         HStack(alignment: .top, spacing: 16) {
-            Card {
+            Card(fillHeight: true) {
                 CardHeader(icon: Icons.leaf, color: Palette.clean, title: "reports.energyMix")
                 if let mix = report.energyMix {
                     ReportEnergyMixView(mix: mix, strings: strings, donut: 130)
@@ -154,7 +154,7 @@ struct ReportsPage: View {
                 }
             }
             if report.hasGridLevels {
-                Card {
+                Card(fillHeight: true) {
                     CardHeader(icon: Icons.leaf, color: Palette.clean, title: "reports.byGridLevel")
                     ReportGridLevelView(report: report, strings: strings)
                 }

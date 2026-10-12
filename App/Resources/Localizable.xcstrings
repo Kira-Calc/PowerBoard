@@ -160,13 +160,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "After this time each day, the previous complete day, week or month is saved to the folder while the app is running."
+            "value": "While the app is running, after this time each day, the previous complete day, week or month is saved to the folder. The byline set in the export dialog is used here too."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "App 运行时，每天到这个时间后，把上一个完整的日、周或月的报告保存到文件夹。"
+            "value": "App 运行时，每天到这个时间后，把上一个完整的日、周或月的报告保存到文件夹。署名使用导出窗口中的设置。"
           }
         }
       }
@@ -1547,6 +1547,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "天"
+          }
+        }
+      }
+    },
+    "export.author": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Byline"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "署名"
+          }
+        }
+      }
+    },
+    "export.author.prompt": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optional, for example your name"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可选，例如你的名字"
           }
         }
       }

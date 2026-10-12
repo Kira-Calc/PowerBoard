@@ -135,6 +135,8 @@ struct ReportBrandHeader: View {
     let report: Report
     let strings: ReportStrings
     var iconSize: CGFloat = 36
+    /// Optional name shown after the title, for example "Weekly report · Kira-Calc".
+    var author: String?
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
@@ -144,7 +146,7 @@ struct ReportBrandHeader: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text(verbatim: AppIdentity.displayName).font(.headline)
-                Text(verbatim: strings.title(report)).font(.subheadline).foregroundStyle(.secondary)
+                Text(verbatim: subtitle).font(.subheadline).foregroundStyle(.secondary)
             }
             Spacer()
             Text(verbatim: strings.periodLabel(report))
@@ -152,6 +154,11 @@ struct ReportBrandHeader: View {
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
         }
+    }
+
+    private var subtitle: String {
+        guard let author = author?.trimmingCharacters(in: .whitespacesAndNewlines), !author.isEmpty else { return strings.title(report) }
+        return "\(strings.title(report)) · \(author)"
     }
 }
 
@@ -230,11 +237,15 @@ struct ReportUsageChart: View {
     }
 
     private var cumulativeChart: some View {
+        // The curve ends when the report was made, so a current period does not show flat future days.
         var running = 0.0
-        let points = [Point(id: "start", x: report.interval.start, value: 0, tool: "")] + report.trend.map { bucket in
-            running += total(bucket)
-            return Point(id: "\(bucket.end.timeIntervalSince1970)", x: bucket.end, value: running, tool: "")
-        }
+        let points = [Point(id: "start", x: report.interval.start, value: 0, tool: "")] + report.trend
+            .filter { $0.start < report.generatedAt }
+            .map { bucket in
+                running += total(bucket)
+                let end = min(bucket.end, report.generatedAt)
+                return Point(id: "\(end.timeIntervalSince1970)", x: end, value: running, tool: "")
+            }
         return Chart(points) { point in
             // A flat fill: PDF output does not keep the transparency of gradients.
             AreaMark(x: .value("Time", point.x), y: .value("Value", point.value))

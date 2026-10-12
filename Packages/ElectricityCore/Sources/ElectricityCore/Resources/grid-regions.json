@@ -1,0 +1,35 @@
+{
+  "version": "2026.10-1",
+  "note": "eia_ba is the EIA-930 balancing authority used for the recent fuel mix. Candidate inference locations are assumptions from public reports, not provider disclosures. Weights are rough shares of likely serving capacity. Static values: US EPA eGRID2023 Rev 2 (June 2025), subregion CO2e total output emission rate, converted from lb/MWh x 0.4536.",
+  "sources_for_providers": {
+    "anthropic": "https://www.aboutamazon.com/news/aws/aws-project-rainier-ai-trainium-chips-compute-cluster ; https://www.anthropic.com/news/expanding-our-use-of-google-cloud-tpus-and-services",
+    "openai": "https://www.axios.com/2025/09/23/openai-stargate-oracle-softbank-texas",
+    "google": "Google data center locations, https://www.google.com/about/datacenters/locations/"
+  },
+  "providers": {
+    "anthropic": {
+      "candidates": [
+        { "id": "aws-us-east-1", "eia_ba": "PJM", "name_en": "AWS, Northern Virginia", "name_zh": "AWS 北弗吉尼亚", "latitude": 38.95, "longitude": -77.45, "weight": 0.35, "watttime_region": "", "emaps_zone": "US-MIDA-PJM", "static_g_per_kwh": 270, "static_basis": "eGRID2023 SRVC", "note": "AWS is Anthropic's primary cloud provider; us-east-1 is AWS's largest region. Assumed." },
+        { "id": "aws-new-carlisle", "eia_ba": "PJM", "name_en": "AWS Project Rainier, Indiana", "name_zh": "AWS Project Rainier（印第安纳）", "latitude": 41.70, "longitude": -86.51, "weight": 0.25, "watttime_region": "", "emaps_zone": "US-MIDA-PJM", "static_g_per_kwh": 416, "static_basis": "eGRID2023 RFCW", "note": "Trainium2 cluster built for Anthropic (Amazon, 2025). Mainly training; share of serving assumed." },
+        { "id": "aws-mississippi", "eia_ba": "MISO", "name_en": "AWS, Mississippi", "name_zh": "AWS 密西西比", "latitude": 32.61, "longitude": -90.04, "weight": 0.10, "watttime_region": "", "emaps_zone": "US-MIDW-MISO", "static_g_per_kwh": 336, "static_basis": "eGRID2023 SRMV", "note": "Second Rainier campus near Canton, Madison County (reported 2025). Assumed." },
+        { "id": "gcp-iowa", "eia_ba": "MISO", "name_en": "Google Cloud, Iowa", "name_zh": "Google Cloud 爱荷华", "latitude": 41.26, "longitude": -95.86, "weight": 0.20, "watttime_region": "", "emaps_zone": "US-MIDW-MISO", "static_g_per_kwh": 420, "static_basis": "eGRID2023 MROW", "note": "Anthropic expanded Google Cloud TPU use (Anthropic, 2025); us-central1 is a major TPU region. Assumed." },
+        { "id": "gcp-oklahoma", "eia_ba": "SWPP", "name_en": "Google Cloud, Oklahoma", "name_zh": "Google Cloud 俄克拉荷马", "latitude": 36.24, "longitude": -95.33, "weight": 0.10, "watttime_region": "", "emaps_zone": "US-CENT-SWPP", "static_g_per_kwh": 397, "static_basis": "eGRID2023 SPSO", "note": "Google data center in Pryor, Mayes County. Assumed." }
+      ]
+    },
+    "openai": {
+      "candidates": [
+        { "id": "stargate-abilene", "eia_ba": "ERCO", "name_en": "Stargate, Abilene, Texas", "name_zh": "Stargate（德州 Abilene）", "latitude": 32.45, "longitude": -99.73, "weight": 0.40, "watttime_region": "", "emaps_zone": "US-TEX-ERCO", "static_g_per_kwh": 334, "static_basis": "eGRID2023 ERCT", "note": "First Stargate site operated for OpenAI (2025 reports). Assumed." },
+        { "id": "azure-east-us", "eia_ba": "PJM", "name_en": "Azure East US, Virginia", "name_zh": "Azure 美国东部（弗吉尼亚）", "latitude": 36.67, "longitude": -78.39, "weight": 0.30, "watttime_region": "", "emaps_zone": "US-MIDA-PJM", "static_g_per_kwh": 270, "static_basis": "eGRID2023 SRVC", "note": "Microsoft Azure has served OpenAI models; East US is a large Azure region. Assumed." },
+        { "id": "azure-south-central-us", "eia_ba": "ERCO", "name_en": "Azure South Central US, Texas", "name_zh": "Azure 美国中南部（德州）", "latitude": 29.42, "longitude": -98.49, "weight": 0.15, "watttime_region": "", "emaps_zone": "US-TEX-ERCO", "static_g_per_kwh": 334, "static_basis": "eGRID2023 ERCT", "note": "Assumed." },
+        { "id": "azure-west-us-3", "eia_ba": "SRP", "name_en": "Azure West US 3, Arizona", "name_zh": "Azure 美国西部 3（亚利桑那）", "latitude": 33.45, "longitude": -112.07, "weight": 0.15, "watttime_region": "", "emaps_zone": "US-SW-SRP", "static_g_per_kwh": 320, "static_basis": "eGRID2023 AZNM", "note": "Assumed." }
+      ]
+    },
+    "google": {
+      "candidates": [
+        { "id": "gcp-iowa", "eia_ba": "MISO", "name_en": "Google Cloud, Iowa", "name_zh": "Google Cloud 爱荷华", "latitude": 41.26, "longitude": -95.86, "weight": 0.40, "watttime_region": "", "emaps_zone": "US-MIDW-MISO", "static_g_per_kwh": 420, "static_basis": "eGRID2023 MROW", "note": "Assumed." },
+        { "id": "gcp-oklahoma", "eia_ba": "SWPP", "name_en": "Google Cloud, Oklahoma", "name_zh": "Google Cloud 俄克拉荷马", "latitude": 36.24, "longitude": -95.33, "weight": 0.30, "watttime_region": "", "emaps_zone": "US-CENT-SWPP", "static_g_per_kwh": 397, "static_basis": "eGRID2023 SPSO", "note": "Assumed." },
+        { "id": "gcp-oregon", "eia_ba": "BPAT", "name_en": "Google Cloud, Oregon", "name_zh": "Google Cloud 俄勒冈", "latitude": 45.60, "longitude": -121.18, "weight": 0.30, "watttime_region": "", "emaps_zone": "US-NW-BPAT", "static_g_per_kwh": 288, "static_basis": "eGRID2023 NWPP", "note": "Google data center in The Dalles. Assumed." }
+      ]
+    }
+  }
+}

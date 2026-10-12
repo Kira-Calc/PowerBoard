@@ -1,0 +1,100 @@
+name: PowerBoard
+
+options:
+  bundleIdPrefix: dev.placeholder
+  deploymentTarget:
+    macOS: "14.0"
+  developmentLanguage: en
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+    GCC_TREAT_WARNINGS_AS_ERRORS: YES
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    DEVELOPMENT_TEAM: ""
+    ENABLE_HARDENED_RUNTIME: NO
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+packages:
+  ElectricityCore:
+    path: Packages/ElectricityCore
+  ArgumentParser:
+    url: https://github.com/apple/swift-argument-parser
+    from: "1.5.0"
+
+targets:
+  PowerBoard:
+    type: application
+    platform: macOS
+    sources:
+      - App/Sources
+      - App/Resources
+      - path: THIRD_PARTY_NOTICES.md
+        buildPhase: resources
+      - path: docs/METHODOLOGY.md
+        buildPhase: resources
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: $(PRODUCT_NAME)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleLocalizations: [en, zh-Hans]
+        LSUIElement: true
+        NSAppleEventsUsageDescription: "Brings the Terminal or iTerm2 tab of a conversation to the front when you click it."
+        LSApplicationCategoryType: public.app-category.developer-tools
+        NSHumanReadableCopyright: "Copyright (c) 2026 Kira-Calc. MIT License."
+    settings:
+      base:
+        PRODUCT_NAME: "PowerBoard"
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.kira-calc.powerboard
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        SWIFT_EMIT_LOC_STRINGS: YES
+        LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+    postCompileScripts:
+      - name: Copy core resources for the CLI
+        # The CLI in Contents/Helpers looks for the ElectricityCore resource bundle next to itself.
+        script: |
+          # It is a nested bundle, so it is signed before the app itself is signed.
+          DEST="${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Helpers"
+          mkdir -p "$DEST"
+          rm -rf "$DEST/ElectricityCore_ElectricityCore.bundle"
+          cp -R "${BUILT_PRODUCTS_DIR}/ElectricityCore_ElectricityCore.bundle" "$DEST/"
+          codesign --force --sign - "$DEST/ElectricityCore_ElectricityCore.bundle"
+        basedOnDependencyAnalysis: false
+    dependencies:
+      - package: ElectricityCore
+      - target: PowerBoardCLI
+        embed: true
+        codeSign: true
+        copy:
+          destination: wrapper
+          subpath: Contents/Helpers
+
+  PowerBoardCLI:
+    type: tool
+    platform: macOS
+    sources:
+      - CLI/Sources
+    settings:
+      base:
+        PRODUCT_NAME: powerboard
+    dependencies:
+      - package: ElectricityCore
+      - package: ArgumentParser
+
+schemes:
+  PowerBoard:
+    build:
+      targets:
+        PowerBoard: all
+        PowerBoardCLI: all
+    run:
+      config: Debug
+    test:
+      config: Debug

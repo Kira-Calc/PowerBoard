@@ -1,0 +1,14 @@
+{
+  "version": "2026.10-2",
+  "unit": "Wh per million tokens",
+  "source": "Derived from claude-carbon (MIT, commit d7313ff) emission factors / 0.287 kgCO2e/kWh, rounded. Includes AWS PUE 1.14. Sonnet fitted to Jegham et al. 2025 (v6); Opus = 2x Sonnet, Haiku = 0.5x Sonnet, Fable = 2x Opus, all extrapolated.",
+  "cache_read_ratio": 0.08,
+  "cache_write_ratio": 1.0,
+  "uncertainty": { "low": 0.5, "high": 2.0 },
+  "tiers": {
+    "small":  { "input": 70,  "output": 1439 },
+    "medium": { "input": 136, "output": 2878 },
+    "large":  { "input": 272, "output": 5756 },
+    "xlarge": { "input": 544, "output": 11512 }
+  }
+}

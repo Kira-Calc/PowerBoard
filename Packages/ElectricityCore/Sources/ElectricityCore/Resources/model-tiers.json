@@ -1,0 +1,15 @@
+{
+  "rules": [
+    { "match": "opus",   "tier": "large",  "confidence": "extrapolated" },
+    { "match": "mythos", "tier": "xlarge", "confidence": "extrapolated" },
+    { "match": "fable",  "tier": "xlarge", "confidence": "extrapolated" },
+    { "match": "sonnet", "tier": "medium", "confidence": "measured" },
+    { "match": "haiku",  "tier": "small",  "confidence": "extrapolated" },
+    { "match": "flash",  "tier": "small",  "confidence": "assumed" },
+    { "match": "gemini", "tier": "medium", "confidence": "assumed" },
+    { "match": "mini",   "tier": "small",  "confidence": "assumed" },
+    { "match": "gpt",    "tier": "medium", "confidence": "assumed" },
+    { "match": "codex",  "tier": "medium", "confidence": "assumed" }
+  ],
+  "fallback": { "tier": "medium", "confidence": "unmapped" }
+}

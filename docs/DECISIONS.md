@@ -1,0 +1,562 @@
+# 开发决策记录
+
+本文件记录开发过程中做出的决定、偏离规格的地方，以及待确认的问题。`docs/SPEC.md` 本身不修改。
+
+---
+
+## M0 脚手架（2026-10-12）
+
+### 环境
+
+- Xcode 27.0，Swift 6.4，macOS 26.7.1，XcodeGen 2.46.0。
+
+### 决定
+
+1. **Swift 语言模式**：SPEC 第 2 节写的是"Swift 5.10+，开启严格并发检查"。我们用 Swift 6 语言模式（`SWIFT_VERSION = 6.0`，Package 用 `swift-tools-version: 6.0`），它本身就强制完整的并发检查，同时打开 `SWIFT_STRICT_CONCURRENCY = complete` 和"警告视为错误"。
+2. **包路径**：第 2.2 节写的是 `ElectricityCore/Sources/...`，第 3 节写的是 `Packages/ElectricityCore/...`，以第 3 节为准。
+3. **资源目录位置**：第 3 节把 `Resources/` 放在包根目录，但 SwiftPM 要求资源放在目标目录里面，所以改放在 `Packages/ElectricityCore/Sources/ElectricityCore/Resources/`。四个 JSON 从 SPEC 原样复制，通过 `BundledResource`（`Bundle.module`）读取。
+4. **依赖按里程碑加入**：M0 只加 swift-argument-parser（Apache-2.0，`from: 1.5.0`，解析到 1.8.x）。GRDB 到 M1 加，DynamicNotchKit 到 M6 加，加入时再更新 `THIRD_PARTY_NOTICES.md`。
+5. **测试框架**：用 Swift Testing（`import Testing`）。
+6. **菜单栏占位**：M0 只放 `NSStatusItem` 加一个 `NSMenu`（菜单里只有"退出"）。SPEC 8.1 的 `NSPopover` 面板到 M2 实现。
+7. **App 结构**：SwiftUI `App` 加 `NSApplicationDelegateAdaptor`，Scene 目前只有一个空的 `Settings`，`LSUIElement = YES`。
+8. **图标**：Asset Catalog 里的名字加 `ph-` 前缀（例如 `ph-lightning`），在 `App/Sources/Icons.swift` 里集中定义。SVG 来自 `phosphor-icons/core` 的 commit `2b75f3a`，设置为模板图像并保留矢量数据。
+9. **签名**：临时签名（`CODE_SIGN_IDENTITY = "-"`），不设开发团队，不开 Hardened Runtime。
+10. **CLI 嵌入**：`aie` 是 XcodeGen 的 `tool` 目标，通过 App 目标的依赖 `copy: { destination: wrapper, subpath: Contents/Helpers }` 复制到 `<App>.app/Contents/Helpers/aie`，并重新签名。
+11. **标识的重复**：产品名和 Bundle ID 在 `project.yml` 和 `AppIdentity.swift` 两处定义，这是 SPEC 2.2 允许的。CLI 名 `aie` 也出现在 `project.yml` 的目标名和 `PRODUCT_NAME` 里，因为 XcodeGen 无法引用 Swift 常量。改名时这三处要一起改。
+12. **Info.plist**：由 XcodeGen 按 `project.yml` 的 `info.properties` 生成到 `App/Info.plist`，并提交进仓库。改它的内容时改 `project.yml`。
+13. **本地化**：String Catalog 放在 `App/Resources/Localizable.xcstrings`，开发语言为 en，另有 zh-Hans。`Info.plist` 声明 `CFBundleLocalizations = [en, zh-Hans]`。
+14. **Core 包的 `defaultLocalization`**：设为 `en`，为以后 Core 里放本地化资源做准备。
+15. **常用命令**：和 CLAUDE.md 一致，不用修改。构建时建议加 `-derivedDataPath build/DerivedData`，产物在 `build/DerivedData/Build/Products/Debug/`（`build/` 已经加进 gitignore）。
+
+### 已知限制
+
+- 嵌入的 `aie` 是静态链接 ElectricityCore 的，但 `Bundle.module` 找的资源包 `ElectricityCore_ElectricityCore.bundle` 只在 App 的 `Contents/Resources/` 里。CLI 现在还不读资源，所以没问题。到 M4（或 CLI 第一次需要系数的时候）再处理：可以让 CLI 只读快照，或者给它显式指定资源路径。
+
+### 待确认（会影响数据准确性，M1 开始前需要用户决定）
+
+**能耗系数与 claude-carbon 当前版本不一致。** SPEC 5.2 说中值是"claude-carbon 的碳系数 / 0.287"。但 claude-carbon 当前 README（commit `d7313ff`）给出的系数（gCO2e/Mtok）按这个公式换算出来是：
+
+| tier | claude-carbon 输入 / 输出 | ÷ 0.287 得到的 Wh/Mtok | SPEC 中的值 |
+|---|---|---|---|
+| small（Haiku） | 20 / 413 | 约 70 / 1439 | 330 / 1990 |
+| medium（Sonnet） | 39 / 826 | 约 136 / 2878 | 660 / 3970 |
+| large（Opus） | 78 / 1652 | 约 272 / 5756 | 1740 / 10450 |
+
+另外有三点不同：
+
+- claude-carbon 的缓存读取默认按输入的 0.08 计入，SPEC 是 0.0。
+- claude-carbon 把 Fable 单独列为 Opus 的 2 倍（156 / 3304），SPEC 把 Fable 归入 large。
+- SPEC 中 large / medium 的比例约为 2.6，不是 claude-carbon 的 2 倍关系。
+
+M0 按 SPEC 原样放入了 `energy-factors.json`。M1 实现能耗计算前需要确认用哪一套数值。
+
+**结论（2026-10-12，用户选择方案 A）**：改用 claude-carbon 现值（`data/factors.json`，commit `d7313ff`）÷ 0.287，取整到 Wh/Mtok。这一项在 M1 落实。
+
+| tier | 匹配 | 输入 | 输出 | 来源 |
+|---|---|---|---|---|
+| xlarge（新增） | fable、mythos | 544 | 11512 | claude-carbon 156 / 3304，Opus 的 2 倍外推 |
+| large | opus | 272 | 5756 | 78 / 1652，Sonnet 的 2 倍外推 |
+| medium | sonnet（以及 gpt、codex 和 fallback） | 136 | 2878 | 39 / 826，Jegham v6 三点拟合 |
+| small | haiku、mini | 70 | 1439 | 20 / 413，Sonnet 的 0.5 倍外推 |
+
+- `k_cache_read` 的默认值从 0.0 改为 0.08（claude-carbon 的取值，文献区间 0.05 到 0.20），设置中仍然可以改。`k_cache_write` 保持 1.0。
+- 新增 `xlarge` 档，`fable`、`mythos` 两条规则改指向它，可信度为 `extrapolated`。
+- 不确定区间 ×0.5 / ×2.0 不变，仍然标注为假设。
+- claude-carbon 的系数已经包含 PUE 1.14（Jegham），不需要再乘。
+- 这些改动偏离了 SPEC 5.1、5.2、5.3 的原文，SPEC 本身不修改。
+- `energy-factors.json` 的 `version` 升为 `2026.10-2`。
+
+---
+
+## M1 数据核心（2026-10-12）
+
+### 本机日志核实结果
+
+只读取了 token 字段和字段名，没有读取或输出对话内容。以下结论来自开发者本机的日志，具体数量从略。
+
+**Codex `reasoning_output_tokens` 已包含在 `output_tokens` 里。** 所有输入或输出不为 0 的 `token_count` 事件都满足 `total_tokens == input_tokens + output_tokens`，并且没有任何事件出现 `reasoning_output_tokens > output_tokens`。输入和输出都是 0 的事件不计入。结论：能耗只按 `output_tokens` 计算，`reasoning` 列只用于展示（SPEC 4.2 要求写进本文件的结论）。
+
+**Codex 增量的计算方式与 SPEC 4.2 不同（用户已确认）。**
+- 相当一部分 `token_count` 事件是重复写入的：`total_token_usage` 和上一个事件相同，但 `last_token_usage` 不是 0。照 SPEC 原文把每个 `last_token_usage` 相加，本机数据会多算约 70%。
+- 少数事件一次合并了两次响应：`total` 的增量大于 `last`，`last` 只记了其中一次，按 `last` 相加会少算约 1%。
+- 采用的算法（`CodexParser`）：
+  - 每个事件计入 `total_token_usage` 相对同一文件中上一个事件的增量。
+  - `total` 没变的事件视为重复，忽略。
+  - 文件中的第一个事件，以及 `total` 任一字段变小（计数器重置）的事件，改用 `last_token_usage`。这样分叉会话（`forked_from_id`）从父会话继承来的累计值不会再算一次。
+- 用这个算法得到的结果，与每个文件"最终 total 减去继承部分"完全一致。
+- SPEC 4.2 说"不要用 `total_token_usage` 相加"，指的是把累计值直接相加；这里用的是累计值的差，两者不冲突。
+
+**其他 Codex 结构变化：**
+- `last_token_usage` 多了 `cache_write_input_tokens` 字段，本机全部为 0。我们按 `cached_input_tokens` 的同样方式，把它当作 `input_tokens` 的子集，写入 `cache_write` 列。
+- 旧版本（0.131 alpha）还写入 `token_usage_record` 行。新版本已经不写了，因此忽略，只用 `token_count`。
+
+**Claude Code：** `message.usage` 里还有 `inference_geo`、`service_tier` 等字段。M1 不读取它们。`inference_geo` 可能对 M7 判断推理地点有用，到时再评估。
+
+### 验收：与 ccusage 20.0.30 对比（仅 Claude Code）
+
+对输入、输出、缓存写入、缓存读取四项分别比较（具体数量从略），合计偏差 0.035%，符合"1% 以内"的要求。差值来自两次运行之间当前会话继续写入的日志。
+
+Codex 部分 ccusage 的合计比本应用高约 9%，差值和分叉会话继承的累计值大致相当，说明 ccusage 把继承的历史又算了一次。这一项不在验收范围内。
+
+### 决定
+
+1. **依赖**：加入 GRDB.swift 7.x（MIT，解析到 7.11.1）。
+2. **`file_cursor` 增加两列**：
+   - `line_count`：Codex 的去重键用到行号，增量读取时需要知道当前读到第几行。
+   - `parser_state`：JSON 文本，保存 Codex 文件的会话 ID、cwd、当前模型和上一个累计值，这样增量读取能接着上次的状态继续。
+   这是对 SPEC 6.1 的补充。
+3. **跳过与忽略的区分**：
+   - 计为"跳过"（`skipped_lines`，数据源页面会显示）：JSON 无效；缺少 `type`、时间戳、会话 ID 或模型；token 字段类型不对。
+   - 不计为跳过，直接忽略：已知但不含用量的行（用户消息、工具调用等）、未知的新行类型、`<synthetic>` 模型、用量全为 0 的行、Codex 重复事件、`info` 为 null 的事件，以及空白行。
+   - 理由：未知的新行类型不是错误，如果计为跳过，数据源页面会一直报警。
+4. **Claude Code 缓存字段缺失时按 0 处理**；字段存在但不是数字时，整行跳过。
+5. **Codex 会话 ID**：取 `session_meta.payload.id`，没有时用 `session_id`，都没有时用文件名。项目路径取 `session_meta` 或 `turn_context` 中最近的 `cwd`。
+6. **Codex 模型**：第一个 `turn_context` 之前的事件，模型记为 `unknown`，会匹配到 fallback。
+7. **Codex 去重键**：`"codex:" + SHA-256(文件路径 + "\n" + 行号 + "\n" + 时间戳原文)`。Claude Code 缺少 ID 时，用 `"sha256:" + 整行的 SHA-256` 作为去重键。
+8. **增量读取**：
+   - 每次最多读约 8 MB，只处理到最后一个换行符为止。
+   - 每读完一块，就把这块的记录和文件游标放在同一个事务里提交。
+   - 只有整个文件读到末尾时，才更新 mtime。
+   - 文件"已是最新"的判断条件：大小等于偏移，并且 mtime 没变。
+9. **文件发现**：
+   - 递归扫描所有 `*.jsonl`，跳过隐藏文件。
+   - 解析符号链接后按真实路径去重，避免 `CLAUDE_CONFIG_DIR` 指向 `~/.claude` 时同一个文件被扫两次。
+   - Codex 不限定文件名必须是 `rollout-*`。
+10. **文件监听**：`LogWatcher` 用 FSEvents，启动时只监听已经存在的目录；之后新建的目录由 60 秒一次的兜底扫描覆盖。连续触发时只保留一次待执行的扫描。
+11. **重新计算历史**：`UsageStore.recalculateAll` 用新系数和新的缓存比例重算能耗。每条记录的电网强度保持它写入时的值，因为实时电网数据过后无法再取得。如果以后需要把修改后的固定碳强度也应用到历史记录，在 M3 加一个选项。
+12. **能耗默认值放在 JSON 里**：缓存比例的默认值写在 `energy-factors.json` 的 `cache_read_ratio` / `cache_write_ratio` 中，`EnergyCalculator` 允许用设置覆盖。
+13. **时间**：`LocalPeriod` 用 `Calendar.dateInterval(of:for:)` 计算日、周、月、年的区间，时区和每周第一天都跟随传入的 `Calendar`。
+14. **App 接入**：App 启动时在后台 actor 中回填历史，之后由 FSEvents 和 60 秒定时器触发增量扫描。进度先记在 `IngestCoordinator.progress` 里，显示进度的界面在 M2 / M3 实现。
+15. **开发工具**：在 Core 包里加了 `ElectricityDev` 可执行目标，用来把本机日志读进指定的数据库并打印汇总。只输出计数，不随 App 发布。
+16. **性能**：Release 构建回填约 500 MB 日志用时约 2 秒；Debug 构建明显更慢（约 1 到 2 分钟），主要慢在按字节切分行。以后需要时可以用 `memchr` 优化。
+
+---
+
+## M2 菜单栏（2026-10-12）
+
+### 验收
+
+用 Claude Code 对话时，测量 Claude Code 日志文件的修改时间与 `snapshot.json` 的修改时间之差，约为 0.06 到 0.5 秒，菜单栏随快照同时刷新，满足"2 秒内更新"。链路是：FSEvents（延迟 0.3 秒）触发增量扫描，扫描后重建快照，快照写入限频为每秒最多一次，最后一次变化一定会写出。
+
+### 决定
+
+1. **快照**：
+   - `SnapshotBuilder` 从数据库生成快照，`SnapshotPublisher`（actor）负责限频写入。每次扫描后都重建一次，包括 60 秒的兜底扫描，所以跨天和迷你曲线的时间窗口会自动更新。
+   - 写入方式是 `Data.write(options: .atomic)`：先写临时文件，再改名替换。测试中一边并发写、一边并发读，没有读到过半个文件。
+   - `today.tokens.input` 是未缓存的输入 token。
+   - `sessions` 收录最近 24 小时内有记录的会话，统计的是整个会话的累计值，不只是这 24 小时。
+   - `last_hour_sparkline_wh` 是 12 个 5 分钟桶，从旧到新排列，最后一个桶是正在进行的 5 分钟。
+   - `clean_share` 显式写成 `null`。
+   - App 退出时（包括收到 SIGTERM）把 `app_running` 写为 `false`。
+2. **菜单栏的实现**：用 `NSStatusItem` 的按钮显示图片和带属性的标题，没有自己画 NSView。数字用 `monospacedDigitSystemFont` 显示，宽度上限 140pt。悬停提示和 VoiceOver 标签都是完整的一句话。
+3. **拆分方式**："合并为一项"时只显示电量；"分成多项"时按电量、token、碳排的顺序显示三项。
+4. **迷你曲线**：只有电量项可以选，因为快照里只有电量曲线；碳排曲线和电量曲线形状相同，token 没有曲线数据。曲线是 36×16pt 的模板图像，空桶画成 1pt 的基线。
+5. **电量单位**：
+   - "自动"：小于 1000 Wh 用 Wh（小于 10 时保留 1 位小数，否则取整数），1000 Wh 及以上用 kWh（小于 10 保留 2 位，小于 100 保留 1 位，其余取整数）。
+   - 区间的低值和高值跟随中值的单位，避免出现"598 Wh 到 2.39 kWh"这样混用单位的情况。
+   - 小数位可以设为自动、0、1 或 2。
+   - 碳排小于 1000 g 显示 g，否则显示 kg。token 用 K、M、B 缩写。
+   - 数字一律用 "." 作小数点。
+6. **弹出面板的内容**：
+   - 今日电量的中值和区间、token 四项、碳排（注明口径）、1 到 2 个等效对比、按工具的条形图，以及设置和退出按钮。
+   - **"打开操作台"按钮推迟到 M3**，因为操作台窗口那时才有。
+   - 按工具的条形图改用 SwiftUI 的简单条形，没有用 Swift Charts：只有两行，用 Charts 时标签排版很挤。
+   - 缓存读取的说明放在 M3 的实时概览里，文案按 0.08 的系数重写，SPEC 示例中"缓存读取不计入能耗"已经不适用。
+7. **等效对比**：
+   - `equivalents.json` 新增 `duration_seconds` 字段，只有按时间计量的条目（微波炉按分钟，LED 灯和笔记本按小时）有这个字段。数量小于 1 时，这些条目用时长表达（例如"约 20 秒"），其他条目用分数表达（"约 1/n"），小于 1/100 时显示"不到 1/100"。
+   - 选择规则：给数量打分，数量在 1 到 100 之间的优先，越接近 10 越好；先电器、后食物各选一个，第三个从剩下数量在范围内的条目中挑；弹出面板最多显示 2 个。
+   - "保留 1 位小数"的具体做法：数量小于 10 时显示 1 位小数，10 及以上取整数。
+8. **设置**：
+   - 存在 `UserDefaults` 里，键名为 `menuBar.split`、`menuBar.energyUnit`、`menuBar.decimals`、`menuBar.content.<metric>`。
+   - M2 先用一个临时的设置窗口（`SettingsWindowController`），只有菜单栏相关选项。M3 会把它并入操作台的"显示"页。
+   - 设置窗口打开时，App 切换为常规应用（显示 Dock 图标），关闭后恢复。
+9. **图标**：新增 `coins`、`cloud`、`gear-six`、`terminal-window`、`power`、`info`，来自同一个 Phosphor commit。SVG 的原始尺寸是 256pt，SwiftUI 里统一通过 `PhosphorIcon` 视图缩放到 16pt。退出按钮用 `power` 图标（SPEC 11.1 的映射表里没有退出）。
+10. **动画**：系统开启"减弱动态效果"时，关闭弹出面板的动画。
+
+### M2 之后的修正（用户反馈）
+
+1. **菜单栏数字折成两行**："仅数字"模式下，用 `fittingSize` 算出的宽度偏窄，标题被折成了两行。改为按标题和图标的实际宽度加 5pt 边距计算，并关闭按钮单元格的换行。
+2. **"今日用电"容易被误解为本机耗电**：标题改为"今日 AI 服务端耗电 / AI server energy today"，下方加一句说明"AI 服务商的数据中心处理你的请求时消耗的电量（估算），不含本机耗电"。悬停提示、碳排提示和设置里的项目名也一并加上"服务端"。这偏离了 SPEC 11.3 示例中 `overview.today.energy` 的"今日用电"，M3 的实时概览沿用新的说法。
+3. **颜色**：新增 `Palette`，统一指定各类数值用的系统颜色：电量橙、token 蓝、碳排紫、电器对比靛蓝、食物对比粉、Claude Code 橙、Codex 青。绿色和红色留给 M7 的洁净度等级（SPEC 10.5），这里不用。分区标题用系统设置风格的彩色圆角图标块（`IconBadge`），等效对比改为两张带浅色底的卡片。
+
+---
+
+## M3 操作台（2026-10-12）
+
+### 验收
+
+所有设置都存在 `UserDefaults` 里，重启后会保留。"登录时打开"不存在 `UserDefaults`，而是读写系统登录项（`SMAppService.mainApp`），状态由系统保存。已截图检查实时概览、明细、数据源、计算方法、关于与致谢各页的中文界面。
+
+### 决定
+
+1. **窗口**：`NavigationSplitView`，侧边栏按 SPEC 9 分三组。图标块使用系统颜色；绿色只用在"洁净度"一项。窗口打开时 App 切换为常规应用（显示 Dock 图标），关闭后恢复；窗口位置会自动保存。
+2. **⌘,** 替换为"设置…"菜单项，打开操作台的"通用"页。弹出面板新增"打开操作台"按钮，齿轮按钮改为打开"通用"页。M2 的临时设置窗口已删除，菜单栏选项移到"显示"页。
+3. **暂不提供尚未实现功能的设置项**："显示"页没有显示模式、刘海面板和终端状态栏的设置，分别在 M6、M4 实现对应功能时加入。"报告"页在 M5 之前只显示一句说明。"方法说明"页在 M8 嵌入 `METHODOLOGY.md` 之前，先根据系数文件生成公式、系数表和模型分级表。
+4. **实时概览**：
+   - 卡片：今日电量（中值、区间和"不含本机耗电"的说明）、碳排（注明口径和数值）、token 四项、2 到 3 个等效对比、今日每小时用电柱状图（Swift Charts，夏令时切换的日子按 23 或 25 小时显示）、最近 24 小时活跃的 8 个会话。
+   - 每个估算数字旁有信息按钮，点开显示公式、缓存比例、区间倍数、系数表、系数版本和来源。
+   - 缓存读取的说明改为"缓存读取按未缓存输入 token 的 8% 计入能耗"，取代 SPEC 示例中的"不计入能耗"。
+5. **明细**：
+   - `Table` 支持按会话、项目、模型分组，可按工具筛选，可搜索项目名或模型名，每一列都可以排序。
+   - 会话显示为"项目名 – 会话 ID 前 8 位"。项目只显示最后一级文件夹名，悬停时显示完整路径（SPEC 13）。电量列悬停时显示区间。
+   - 没有对应系数的模型在表格上方单独列出（SPEC 5.3）。
+   - SQLite 只有在查询里只有一个 MIN/MAX 聚合时，非聚合列才取自 MAX 所在的那一行，所以"首次时间"改用第二条查询取得。
+6. **数据源**：
+   - `file_cursor` 增加 `source` 列（迁移 `v2-cursor-source`）。旧记录在下次扫描时补上。
+   - 页面显示状态、上次读取时间、已记录条数、已读取文件数、跳过的行数和文件夹列表，可以添加或移除自定义文件夹（`NSOpenPanel`），可以重新扫描。
+   - "上次读取"在本次启动后有新读取时显示读取时刻，否则显示已读取日志中最新的修改时间。
+7. **数据保留**：可选永久、2 年、1 年。扫描前最多每小时执行一次删除，文件游标保留，所以旧日志不会被重新导入。
+8. **清除全部数据**：确认后删除所有记录，但保留文件游标：已读取的日志不再导入，此后只记录新的用量。对话框里写明了这一点。
+9. **计算方法**：
+   - 缓存写入比例、缓存读取比例和固定电网碳强度可以修改（比例限制在 0 到 10），修改只影响新记录，另有"恢复默认值"按钮。
+   - "重新计算历史"会先弹出确认对话框，然后用当前系数、缓存比例和电网碳强度重算全部记录。**口径为 `cloud_average` 的记录改用当前设置的碳强度**；基于地区或实时电网数据的记录保留原值（这一条修订了 M1 决定 11）。
+   - 等效对比可以逐项开关，弹出面板和实时概览都会遵循这个设置。
+10. **通用**：
+    - App 语言通过写入 App 自己的 `AppleLanguages` 生效，重新打开后才会变化，页面提供"立即重新打开"按钮。
+    - CLI 语言存在 `cli.language` 键（App 的偏好设置域），M4 的 CLI 通过 `UserDefaults(suiteName: AppIdentity.bundleID)` 读取。
+    - 登录时打开：未签名的 App 注册可能失败，失败时显示系统返回的错误。
+11. **通知**：
+    - App 运行时每分钟检查一次。每日报告在设定时间之后发送一次，内容是当日的电量和碳排；每周报告在每周第一天的同一时间发送，内容是上一周的汇总；超过提醒值时每天最多提醒一次。
+    - 已发送的日期记在 `UserDefaults` 里，避免重复发送。
+    - 第一次打开任意一项通知时请求通知权限；被拒绝时页面提示用户去系统设置中打开。
+12. **"关于与致谢"页**：显示版本、MIT 许可证、claude.ai 不在统计范围内的说明、隐私说明，以及打包进 App 的 `THIRD_PARTY_NOTICES.md` 全文。`Info.plist` 的版本号改为读取 `MARKETING_VERSION`。
+13. **开发辅助**：启动参数 `-openDashboard <页面>`（例如 `overview`、`details`）会在启动时打开指定页面，用于截图检查。
+14. **洁净度页（M7 之前）**：说明当前使用的固定碳强度，以及需要连接实时电网数据后才能显示清洁程度。
+
+### M3 之后的修正（用户反馈，2026-10-12）
+
+1. **配色**：只用四种强调色：绿（只用于"清洁"）、黄、橙、红，其余用灰色。对应关系：token 黄、电量橙、碳排红；Claude Code 橙、Codex 黄。所有数字改用正文颜色，颜色只出现在图标块、条形图和图表上。M2 修正中"不用绿色和红色"的约定作废。**SPEC 10.5 要求 `lessClean` 不用红色**：碳排的图标块现在用红色，M7 的等级圆点仍按 SPEC 处理，`lessClean` 用橙色。
+2. **去掉大面积色块**：弹出面板的等效对比改成普通的行，实时概览的等效对比合并进一张中性卡片，中间用分隔线隔开。明细页"无对应系数"提示的底色也改为中性。
+3. **对齐**：实时概览中电量卡片和碳排卡片改为等高。估算数字前的"约"单独作为一个较小的灰色字，放在数字前面。
+4. **CO₂e**：界面上统一写成带下标的 `CO₂e` 和 `gCO₂e/kWh`，单位由 `Units` 统一提供并作为参数传给本地化字符串。CLI 和导出文件仍用 ASCII 的 `CO2e`，避免终端或表格软件显示异常。
+5. **数字滚动效果**：新增 `RollingText`，用 `contentTransition(.numericText())` 实现数字变化时上下模糊滚动；开启"减弱动态效果"时改为淡入淡出。菜单栏、弹出面板和实时概览中的数字都用它显示。
+6. **菜单栏改用 SwiftUI 绘制**：状态项按钮里嵌入一个 `NSHostingView`（不接收点击，点击由按钮处理），宽度取 SwiftUI 内容的实际宽度。左右各留 4pt 边距，图标 14pt，图标和数字间距 3pt，宽度上限 180pt。
+7. **合并项可以显示 token**："合并为一项"时可以选择显示电量、token，或者电量和 token 一起显示（`menuBar.combinedDisplay`）。每一项的显示内容（仅图标、图标和数字、仅数字、曲线）仍然分别设置。
+8. **图标块改用实心图标**：色块里的图标改用 Phosphor 的 Fill 字重（SPEC 11.1 允许用 Fill 表示强调），行内的小图标仍然用 Regular。
+
+### 图标改用 SF Symbols（用户决定，2026-10-12）
+
+- 用户认为 Phosphor 和 macOS 系统的风格不够一致，决定改用 SF Symbols。这偏离了 SPEC 2、11.1 的规定（"只用 Phosphor，不用 SF Symbols"）。CLAUDE.md 的硬性规则已同步修改，SPEC 不动。
+- 所有图标仍然只通过 `Icons.swift` 中的 `Icon` 常量引用。每个 `Icon` 有两种形式：`regular` 用于行内和菜单栏，`badge` 用于彩色图标块（有实心版本时用实心版本）。
+- 主要对应关系：电量 `bolt`，token `number`，碳排 `carbon.dioxide.cloud`，工具 `terminal`，实时概览 `gauge.with.dots.needle.67percent`，报告 `calendar`，明细 `tablecells`，洁净度 `leaf`，通用 `gearshape`，数据源 `folder`，显示 `menubar.rectangle`，计算方法 `function`，通知 `bell`，方法说明 `book`，关于 `info`。所有符号在 macOS 14 上都可用。
+- Phosphor 的 SVG 资源已删除，`THIRD_PARTY_NOTICES.md` 中的 Phosphor 一节也一并删除。SF Symbols 受 Apple 的 SF Symbols 许可约束，只能用在 Apple 平台上运行的 App 中，不需要附第三方声明。
+- 图标块使用系统颜色的 `.gradient`，和系统设置的图标块一致。
+
+### 累计曲线与本机耗电（用户要求，2026-10-12）
+
+1. **今日累计用电曲线**：实时概览新增一张曲线图，每 15 分钟一个点，画到当前时刻为止。曲线用单调插值（`.monotone`，不会出现回落），下方有渐变填充，末端标出当前值，并画一条竖向虚线；网格线是细虚线，y 轴放在右侧。原来的每小时柱状图保留。
+2. **本机耗电（偏离 SPEC 1.2）**：SPEC 1.2 把"本机电脑自身的耗电"列在范围之外。用户要求加入，并选择统计**整台 Mac** 的耗电（而不是只统计 AI 工具进程）。
+   - 数据来源：IORegistry 中 `AppleSmartBattery` 的 `PowerTelemetryData.SystemLoad`（单位 mW），表示整机实时负载功率，不需要管理员权限。没有这项数据的 Mac（例如台式机）上，开关不可用，并会显示说明。
+   - App 运行时每 10 秒读取一次，相邻两次读数按梯形积分算出电量，再按 UTC 分钟累加存入新表 `local_energy`（迁移 `v3-local-energy`）。两次读数间隔超过 60 秒（睡眠、App 未运行）的部分不补算。
+   - 开关在"通用"页，默认关闭。打开后，菜单栏、弹出面板和实时概览中的电量数字都显示"AI 服务端估算值加本机实测值"的合计，并分别列出两部分；标题改为"今日耗电（含本机）"。本机部分没有不确定区间，合计区间的上下限都只是加上本机实测值。
+   - 本机部分不估算碳排：用户所在地的电网碳强度未知，套用云服务商的平均值不合适。
+   - 快照的 `today` 新增可选字段 `local_energy_wh`，只在开关打开时写出。
+   - "清除全部数据"会同时清除本机耗电记录。
+   - 每小时柱状图在开关打开时按"AI 服务端 / 本机"分段堆叠，累计曲线显示两者的合计。
+   - 本机部分用黄色。
+3. **小数值的显示精度**：小于 1 Wh 的值保留 2 位小数（例如本机几十秒的耗电），避免显示成 "0.0 Wh"。
+4. **电网洁净度**：用户确认按原计划在 M7 实现。
+
+### Antigravity、图表、用词与菜单栏进度条（用户要求，2026-10-12）
+
+1. **新增数据源 Google Antigravity（SPEC 4 之外）**：
+   - 位置：`~/.gemini/antigravity`、`antigravity-cli`、`antigravity-ide`、`antigravity-backup`、`antigravity-acp`，以及 `~/.config/antigravity`。如果目录下有 `conversations/` 就用它。环境变量 `ANTIGRAVITY_DATA_DIR` 可以指定多个路径（逗号分隔）来替代默认位置。这些位置参考了 ccusage 的文档（MIT）。
+   - 格式：每个会话是一个 SQLite 文件。以只读方式打开，只读取 `gen_metadata.data`、`steps.metadata` 和 `trajectory_metadata_blob.data` 里的 protobuf，并且只解码用量消息和模型名，不读取会话内容。字段编号参照 ccusage 的解析器写成，没有复制它的代码。
+   - token 对应关系：输入（未缓存）、缓存写入、缓存读取直接对应；输出取"总输出"与"可见输出加推理"中较大的一个，推理只用于展示。
+   - 去重：同一个响应可能同时出现在生成记录、步骤记录和重试记录里。按 response、provider message、message 三种 ID 中任意一个相同即合并，每项 token 取最大值；时间优先用记录自身的时间戳，其次是会话开始时间，最后是文件修改时间。同名的数据库（例如备份目录里的副本）按同一个会话合并。
+   - 增量方式：SQLite 文件是原地修改的，没法按字节偏移读取。所以把数据库与 `-wal` 文件的大小之和、最新修改时间作为游标；有变化时整库重新解析，并在一个事务里替换该会话的全部记录（`UsageStore.replaceSession`）。
+   - 模型名直接由显示名转换，例如 "Gemini 3.8 Flash (High)" 转成 `gemini-3.8-flash-high`。没有沿用 ccusage 的内部 ID 映射表，只有 ID 的记录记为 `antigravity-model-<id>`，按 fallback 档计算。
+   - 新增分级规则：`flash` 归小档，`gemini` 归中档，可信度都是 `assumed`。这两条必须放在 `mini` 之前，因为 "gemini" 本身含有 "mini"。
+   - **尚未用真实数据验证**：本机只有两个 Antigravity 数据库，而且里面还没有用量记录。测试使用手工构造的 protobuf 数据。等有真实数据后，需要再和 `ccusage antigravity daily` 对一次。
+2. **图表合并**：实时概览中原来的两张图合并成一张卡片，放在电量和碳排卡片的下方。卡片上有三组切换：
+   - 指标：用电或 token。token 柱状图分"缓存读取"和"输入、输出和缓存写入"两段。
+   - 样式：柱状或累计曲线。
+   - 时间尺度：小时（今天）、天（近 14 天）、周（近 12 周），参照系统电池界面的切换方式。
+   切换状态保存在 `@AppStorage`（`chart.metric`、`chart.style`、`chart.scale`）。Core 新增 `ChartScale.boundaries`（按本地日历计算，夏令时正确）和 `UsageStore.series`。
+3. **token 图标**：改为 `text.word.spacing`（表示被切分的文字）。
+4. **用词**："今日 AI 服务端耗电"改为"今日推理耗电 / Inference energy today"；包含本机时显示"今日耗电"，分项为"推理"和"本机"。标题下方的说明文字已删除，改放在信息按钮的弹窗第一段。通知、悬停提示和设置项同步修改。
+5. **菜单栏进度条**：今日 token 数增加后，菜单栏数字下方会出现一条 2pt 高的细线，上面有一段光带循环滑动（1.2 秒一次），最后一次增加之后 4 秒自动消失。用 `TimelineView` 绘制，只有显示时才创建，不会在后台持续运行。开启"减弱动态效果"时光带不移动。只在 token 增加时触发；本机耗电的持续增长不触发。
+
+### 服务器端标识、图表动画与按智能体拆分（用户要求，2026-10-12）
+
+1. **服务器端标识**：标题改为"今日 AI 推理耗电 / AI inference energy today"，标题右侧加一个灰色小标签"服务器端 / Server-side"（`ServerTag`），表明这是 AI 服务商服务器上的耗电，不需要再加说明句。打开"包含本机耗电"时，标题为"今日耗电"，不显示这个标签，分项写作"AI 推理（服务器端）"和"本机"。
+2. **图表动画**：
+   - 切换时间尺度、指标、柱状/累计时，柱子从 0 长到实际高度，累计面积从 0 升起（弹簧动画，约 0.6 秒）。柱状和累计两张图交叉淡入淡出。
+   - 数据定时刷新时不再从 0 开始长，只把已有的柱子平滑过渡到新数值。
+   - y 轴范围固定为最终数据的最大值，避免动画过程中坐标轴跟着变化。
+   - 开启"减弱动态效果"时只保留淡入淡出。
+3. **按智能体拆分**：柱状图按 Claude Code（橙）、Codex（黄）、Antigravity（红）分段堆叠；打开"包含本机耗电"时再加一段本机（灰）。累计图为按智能体堆叠的面积图，上方画一条总量线。图例只列出该时间范围内有数据的智能体。原来按"缓存读取 / 其他"拆分 token 的方式已取消。`SeriesBucket` 新增 `serverWhBySource` 和 `tokensBySource`。
+4. **本机颜色**：本机耗电改为灰色，避免和 Codex 的黄色混淆。
+
+### 图表：恢复原样式与智能体选择（用户要求，2026-10-12）
+
+1. **累计图恢复原样式**：每个系列一条 2pt 彩色曲线，下方是同色渐变填充，末端圆点，当前时刻一条竖向虚线；不再画堆叠面积和黑色总量线。上一版的错位（曲线从 0 点开始，面积却从有数据处才开始）是因为 `AreaMark` 按系列默认会堆叠，而总量线是另外单独计算的。现在面积指定 `stacking: .unstacked`，并且每个系列的面积和曲线共用同一组数据点。
+2. **智能体选择**：图表上方有一排复选框：合计、Claude Code、Codex、Antigravity，打开"包含本机耗电"且指标为用电时还有"本机"。
+   - 勾"合计"只显示一个总量系列（用电为橙色，token 为黄色）；勾选任意智能体会自动取消"合计"，反之亦然；全部取消时退回"合计"。
+   - 多个智能体时，柱状图在每个时间段内并排显示（`.position(by:)`），不叠加；累计图每个智能体一条曲线。
+   - 选择保存在 `@AppStorage("chart.selection")`。复选框旁的色点就是图例，图表自带的图例已隐藏。
+   - 切换勾选时也会重新播放"柱子长出、曲线升起"的动画。y 轴范围取所选系列中的最大值。
+
+---
+
+## M4 终端状态栏（2026-10-12）
+
+### 验收
+
+- **执行时间**：Debug 构建的 `aie statusline` 连续运行 20 次，中位数 8.3 ms，最长 9.2 ms，满足"小于 50 ms"。
+- **组合和恢复**：在临时目录（通过 `CLAUDE_CONFIG_DIR`）里用一份带有 `statusLine` 的设置文件测试：`install-statusline --combine` 之后输出为 `my-status | 4.22 kWh today | 1.21 kg CO2e`，`uninstall-statusline` 之后文件与原文件逐字节一致，两次操作的备份都保留。
+- **尚未在你真实的 Claude Code 中安装**：安装会修改当前会话正在使用的 `~/.claude/settings.json`。其中已有 Vibe Island 的状态栏命令，用户需要自己选择"两者都显示"还是"替换"。
+
+### 决定
+
+1. **子命令**：`statusline`、`today`、`install-statusline`、`uninstall-statusline`。**`report` 推迟到 M5**，和报告功能一起实现。
+2. **文字生成和接入方式分开**：`StatusLineFormatter`（在 Core 中）只负责生成文字，CLI 和将来的其他终端都可以复用（SPEC 8.3）。
+   - 输出格式与 SPEC 示例一致。
+   - 当前会话不在快照中时，省略"本会话"那一段。
+   - 快照缺失时，中文输出也做了本地化：`aie：打开 AI Electricity 开始统计`。
+   - 有颜色时数值加粗、分隔符变暗；设置了 `NO_COLOR` 时不输出 ANSI 控制码。
+   - 终端输出仍用 ASCII 的 `CO2e`。
+3. **语言和格式的优先级**：命令行参数优先，其次是 App 设置中的 `cli.language` / `cli.format`（CLI 通过 `UserDefaults(suiteName: AppIdentity.bundleID)` 读取），最后默认英文、default 格式。App 安装时不在命令里写死参数，所以以后改设置会立即生效。
+4. **标准输入**：Claude Code 通过管道传入 JSON；如果是在终端里手动运行（标准输入是终端），不等待输入。
+5. **`--chain`**：用 `/bin/sh -c` 运行原来的命令，把同样的标准输入传给它，取它输出的第一行，后面接 ` | ` 和我们的文字。原命令失败或没有输出时，只显示我们的文字。
+6. **安装逻辑**（`StatusLineInstaller`，App 和 CLI 共用）：
+   - 设置文件位置：`CLAUDE_CONFIG_DIR` 中的第一个路径，没有时用 `~/.claude/settings.json`。文件不存在时新建。
+   - **只改 `statusLine` 这一项**：`JSONTextEditor` 在原文上定位这个顶层键并直接替换文本，其他内容（键的顺序、缩进、空白）保持原样。新增时使用文件现有的缩进。修改前会先完整解析一次，文件不是合法 JSON 对象时直接报错，不做任何修改。
+   - 每次修改前都备份为 `settings.json.aie-backup-<UTC 时间>`；同一秒内有多次备份时加序号，不会互相覆盖。
+   - 原来的 `statusLine` 原文保存在 `~/Library/Application Support/AIElectricity/statusline-original.json`。卸载时按原文写回（不重新缩进）；原来没有状态栏时，卸载会删掉这一项。在已经安装的情况下重新安装，会保留最初保存的原值。
+   - 写入的命令是 `'<aie 的绝对路径>' statusline [--chain '<原命令>']`，路径用单引号括起来，因为 App 名里有空格。识别"是不是我们的命令"的依据：命令中含 `statusline`，并且含当前的 aie 路径或 `/Contents/Helpers/aie`。
+   - 原来的状态栏不是 command 类型时不能组合，只能替换。
+7. **交互**：CLI 遇到已有的状态栏时，在终端里询问"替换 / 组合 / 退出"；非交互环境下必须传 `--replace` 或 `--combine`。App 用确认对话框询问"两者都显示 / 替换 / 取消"。
+8. **App 设置**：在"显示"页新增"终端状态栏"一节，包括开关（打开时安装，关闭时恢复原状态栏）、语言、格式，以及安装结果和备份路径的提示。CLI 语言从"通用"页移到了这里。底部说明 Codex 暂不支持自定义状态栏命令，可以改用 tmux / iTerm2（具体配置示例在 M8 写进 README）。
+9. **已知限制**：命令里写的是 App 的绝对路径。如果 App 被移动或重新构建到别的位置，需要在设置里关掉再打开一次开关。
+
+### 活跃对话与完成提醒（用户要求，M5 之前，2026-10-12）
+
+1. **数据来源**：
+   - **Claude Code**：每个运行中的进程会写 `~/.claude/sessions/<pid>.json`。我们只读其中的 `pid`、`sessionId`、`cwd`、`status`（`busy` / `idle` / 其他）和 `statusUpdatedAt` 几个字段。**`name` 字段不读**：它是根据对话内容生成的标题。同目录下的 `*.key` 文件也不读。进程存活、并且可执行文件路径含 `/claude` 时，才算活跃对话。
+   - **Codex**：解析器新增 `task_started` → 运行中、`task_complete` / `turn_aborted` → 已完成，写入新表 `session_activity`（迁移 `v4-session-activity`，记录会话 ID、项目路径、日志路径、状态和事件时间）。某个 `codex` 进程正打开着该会话的日志文件时（通过 libproc 读取进程打开的文件），才算活跃对话。已经读过的旧日志不会补算状态，只有之后的新事件会记录。
+   - **Antigravity**：没有可靠的运行状态来源，这一版不进活跃对话列表。
+   - **对 CLAUDE.md 硬性规则的说明**：这些字段（进程号、会话 ID、状态、Codex 任务事件类型）超出了 SPEC 第 4 节列出的范围，但都不是对话内容，是为实现用户要求的功能所做的最小补充。
+2. **进程识别**：Claude Code 会把自己的进程名改成版本号（例如 `2.1.296`），所以改用 `proc_pidpath` 得到的可执行文件路径来判断。
+3. **状态与颜色**：运行中为蓝色、带向外扩散的脉冲；已完成为绿色；等待用户操作为橙色。列表排序：运行中、等待中、已完成，每组内按最近的状态变化排在前。每行显示项目名、工具名、状态和持续时间（每 30 秒刷新一次）、本会话电量，以及一个跳转图标。
+4. **点击跳转**：沿父进程链找到第一个有 Dock 图标的 App。如果是 Terminal 或 iTerm2，用 AppleScript 选中对应 TTY 的标签页并把窗口提到最前；其他 App（包括 Codex 桌面版所在的 ChatGPT）直接激活。第一次使用会弹出系统的"自动化"授权；`Info.plist` 已加入 `NSAppleEventsUsageDescription`。
+5. **完成提醒**：每 2 秒刷新一次列表。某个会话从"运行中"变为"已完成"时：
+   - 菜单栏第一项的图标换成绿色对勾，出现时弹跳两次，之后持续脉冲，8 秒后恢复原样；
+   - 自动弹出菜单栏面板。弹出时不调用 `makeKey`，不会抢走当前 App 的键盘焦点。
+   这两项都可以在"通知"页的"对话完成时"中分别关闭，默认都打开。开启"减弱动态效果"时不播放弹跳和脉冲。
+6. **位置**：弹出面板最上方显示"活跃对话"（列表为空时整块隐藏）；操作台实时概览中，这一块放在电量、碳排卡片和图表之间，列表为空时显示提示文字。
+
+### 活跃对话的修正（用户反馈，2026-10-12）
+
+1. **点击无法跳转的原因**：沿父进程链向上查找所属 App 时，`login` 进程属于 root，`proc_pidinfo` 对它不可用，查找在这里中断，结果找不到 App。改为用 `sysctl(KERN_PROC_PID)` 读取父进程号，对任何进程都可用。另外，按 macOS 14 的协作式激活规则，后台 App 激活另一个 App 前要先调用 `NSApp.yieldActivation(to:)`。新增开发辅助启动参数 `-describeJump <pid>`：直接运行可执行文件时，打印跳转会去哪个 App 和 TTY，但不真正执行跳转。
+2. **对话标题（用户要求，偏离"不读取对话内容"的规则）**：
+   - `~/.claude/sessions/<pid>.json` 中的 `name` 只是由目录名派生的短名（`nameSource: derived`，形如 "<目录名>-37"），不是对话标题，已不再读取。
+   - 标题按顺序取：日志中最近的 `ai-title` 记录的 `aiTitle`；没有时，取最近的 `last-prompt` 记录中 `lastPrompt` 的第一行。空白合并为一个空格，最多 80 个字符。终端会话通常没有 `ai-title`，所以大多显示最近一次提问。
+   - **这是用户本人的提问内容**，按用户要求用于显示。只在活跃对话列表和完成通知中显示，不写入数据库、快照或日志。读取方式是从文件末尾向前按块搜索，最多搜索 4 MB；结果按会话缓存，文件修改时间变化后最多每 30 秒重新读取一次。
+   - 面板宽度较窄，第二行只显示工具名和状态，项目名在悬停提示中可见；操作台中同时显示项目名。
+3. **完成时的系统通知**：对话从"运行中"变为"已完成"时发送一条系统通知，标题为"对话已完成"，正文为对话标题加项目名和工具名。点击通知会跳到该对话所在的终端或 App。App 在前台时也显示通知横幅。"通知"页新增开关"发送系统通知"，默认打开；启动时如果开关是打开的，会请求通知权限。
+
+---
+
+## M5 报告与导出（2026-10-12）
+
+### 验收
+
+用开发参数 `-exportTest <目录>` 把本周报告按 6 种格式 × 中英两种语言导出，共 12 个文件：
+- `file` 识别结果都正确（PNG 图片、PDF 文档、CSV、JSON、UTF-8 文本）；
+- JSON 全部能被解析；CSV 以 UTF-8 BOM 开头；
+- PNG 尺寸分别是 1080×1350 和 1600×900；
+- 已人工查看中文 PNG 和英文 PDF 的版面，图表坐标轴的日期跟随导出语言。
+
+自动导出在临时目录中测试通过：生成了上一天的 Markdown，并记录了已导出的标记，不会重复导出。
+
+### 决定
+
+1. **M6 刘海面板暂不实现（用户决定）**：DynamicNotchKit 没有引入，显示模式等相关设置也不加。以后需要时再做。
+2. **报告数据（Core 的 `ReportBuilder`）**：
+   - 周期：日、周、月、年，按本地日历计算，周的起始日跟随系统。
+   - 内容：总量、与上一期的对比（电量中值的百分比变化）、按工具 / 模型 / 项目的拆分（同名项跨来源合并，按电量排序）、趋势、用量最高的时段、对话数、所用的电网碳强度和系数版本。
+   - 趋势的粒度：日报按小时，周报和月报按天，年报按月。
+3. **年度总结**：分页卡片，共 5 页：
+   - 全年总电量、1 个等效对比、碳排和 token；数据不满一年时，注明起始日期和覆盖的天数；
+   - 用量最高的一天；
+   - 最常用的模型（按 token 数）；
+   - 最长的对话（首末记录间隔最长的会话）；
+   - 各月变化柱状图。
+4. **导出格式**：
+   - **PNG**：分享卡片，按一半尺寸排版、2 倍比例渲染，得到 1080×1350 / 1600×900 像素，正文比例正常。白底、浅色外观。
+   - **PDF**：单页 A4，包含汇总、趋势图、三张拆分表（各取前几行）、计算方法摘要和底注。
+   - **CSV**：`usage_event` 的原始记录，UTF-8 带 BOM，CRLF 换行。
+   - **JSON**：汇总加原始记录。
+   - **Markdown**：文字报告。中文版使用全角标点；项目只显示文件夹名（SPEC 13）。
+5. **共享组件**：`ReportSummaryView`、`ReportTrendChart`、`ReportBreakdownTable`、`ReportFooter` 同时用于报告页和 PNG / PDF。为了让导出语言可以和 App 语言不同，这些组件的文字统一用 Core 的 `ReportStrings`（中英对照表，CLI 也用它），App 的界面框架部分仍然用 String Catalog。
+6. **底注**：PNG 和 PDF 底部注明"估算值。方法见 <仓库地址>/docs/METHODOLOGY.md"。仓库地址暂定为 `https://github.com/Kira-Calc/AI_Electricity`（占位），统一放在 `AppIdentity.repositoryURL`。
+7. **隐藏项目名**：项目路径替换为"项目 1 / Project 1"这样的编号。CSV 和 JSON 的原始记录在不隐藏时保留完整路径。
+8. **`aie report`**：参数为 `--period`、`--date YYYY-MM-DD`、`--format md|json|csv`、`--lang`、`--hide-projects`。输出到标准输出时，CSV 不带 BOM。
+9. **CLI 的资源包**：为避免将来 CLI 用到 Core 资源时崩溃，构建时把 `ElectricityCore_ElectricityCore.bundle` 复制到 `Contents/Helpers/`，并先单独签名，否则整个 App 的签名会失败（"code object is not signed at all"）。M1 记录的已知限制由此解决。
+10. **自动导出**：
+    - 设置放在报告页底部：可选每日、每周、每月，以及时间、格式、语言、是否隐藏项目名和文件夹。
+    - App 运行时每分钟检查一次；到了设定时间之后，导出上一个完整的周期，每个周期只导出一次。
+    - 文件夹用书签（bookmark）保存。App 没有沙盒，所以没有使用 SPEC 写的安全范围书签（security-scoped），只用普通书签，同样能在文件夹被移动或改名后找回。
+11. **报告页**：顶部是周期切换、前后翻页（不能翻到未来）和"回到本期"；年报显示"年度总结"按钮；导出按钮打开导出对话框（格式、语言、隐藏项目名），然后弹出保存面板。
+
+---
+
+## M7 电网洁净度（2026-10-12）
+
+### 验收状态
+
+- 三档等级的换算、多个候选地区的加权合成、"各地区情况不同"的提示、15 分钟缓存、请求失败时回退到上次的值或静态年均值、按经纬度查询 WattTime 区域、登录令牌复用、注册出错时的提示、Electricity Maps 的绝对值、终端状态栏的电网一段、新记录写入等级：都已用模拟的网络层测试通过（130 个测试）。
+- 钥匙串：WattTime 密码和 Electricity Maps 密钥只存在钥匙串里（服务名为 Bundle ID），`UserDefaults` 里只有用户名。
+- 不包含任何暂停或推迟任务的功能，洁净度页明确写了这一点。
+- **尚未用真实账号验证**：没有替用户注册 WattTime。`/v3/signal-index` 的路径和返回格式来自公开资料（WattTime 官方 Python 客户端中没有这个接口），用户登录后需要实际核对一次；如果不对，界面会显示"无法获取电网数据"，并回退到静态值。
+
+### 决定
+
+1. **百分位方向（SPEC 10.3 要求核实）**：WattTime 官方接口说明（`https://docs.watttime.org/openapi.json`，`GET /v3/signal-index`）写明，0 = 最清洁、100 = 最不清洁，比较对象是该地区**未来 24 小时的预测**（不是近期的历史范围，最初的记录有误，已更正）；所有用户在所有覆盖地区都可以免费使用这个接口，但必须登录（不带令牌调用返回 401）。默认三等分：低于 33.3 为较清洁，高于 66.7 为较不清洁，阈值可以在设置中以 5 为步长调整。
+2. **推理地点（用户确认：按公开资料推测多个地区）**：`grid-regions.json` 中，每家服务商有 3 到 5 个候选地区，记录经纬度、权重（合计为 1）、Electricity Maps 区域代码、eGRID 年均碳强度和资料说明，可信度均为"假设"。
+   - Anthropic：AWS 北弗吉尼亚 0.35、Project Rainier（印第安纳）0.25、AWS 密西西比 0.10、Google Cloud 爱荷华 0.20、俄克拉荷马 0.10。
+   - OpenAI：Stargate Abilene 0.40、Azure 东部（弗吉尼亚）0.30、Azure 中南部（德州）0.15、Azure 西部 3（亚利桑那）0.15。
+   - Google（Antigravity）：爱荷华 0.40、俄克拉荷马 0.30、俄勒冈 0.30。
+   - WattTime 的区域代码不写死，首次使用时通过 `/v3/region-from-loc` 按经纬度查出并缓存。
+   - Claude Code 日志中的 `usage.inference_geo` 只有 `global` / `not_available` 两种值，无法确定具体地点，所以所有地点都按"推测"显示（空心圆点）。
+3. **工具对应的服务商**：Claude Code 对应 Anthropic，Codex 对应 OpenAI，Antigravity 对应 Google。Antigravity 也可能调用 Claude 模型，这里按工具而不是按模型对应，是一个简化。
+4. **静态回退值**：美国 EPA eGRID2023 Rev 2（2025 年 6 月）各子区域的 CO₂e 总排放率，从 lb/MWh 乘以 0.4536 换算：SRVC 270、RFCW 416、SRMV 336、MROW 420、SPSO 397、NWPP 288、ERCT 334、AZNM 320 gCO₂e/kWh。来源是转引 EPA Table 1 的第三方汇总页，已和另一来源中 ERCT 的数值交叉核对。静态数据只显示数值，不显示等级。
+5. **WattTime 账号（用户确认：App 内注册和登录）**：洁净度页提供"登录"和"创建免费账号"（用户名、密码、邮箱、组织）；登录前先验证一次凭据。每个用户使用自己的账号：WattTime 的许可是个人使用、不得转发数据，免费额度也是按账号计算的，所以不能内置共用账号。
+6. **CO₂ 计算不变**：每条记录的碳排仍然用设置中的固定碳强度（默认 287，`cloud_average`）。WattTime 免费方案只提供百分位，不提供绝对值；推测地点的加权绝对值也不够可靠，不宜直接换算碳排。每条记录额外写入 `clean_level`、`clean_share` 和 `grid_source`，但只写给时间在 20 分钟以内的新记录，回填的历史记录不写。
+7. **快照与终端状态栏**：`today.grid` 取今天用电最多的工具对应的服务商。只有配置了实时数据源、并且拿到了等级时，终端状态栏末尾才加 `grid: cleaner (est.)` / `电网：较清洁（推测）`。
+8. **显示**：
+   - 菜单栏：电量数字旁的小圆点。只在配置了数据源后显示，避免未配置时多出一个灰点；悬停提示为"服务器电网：较清洁（推测地点）"。
+   - 弹出面板：电量下方一行，显示圆点、等级、地点和更新时间。
+   - 洁净度页：每家服务商的当前等级、各候选地区的区域代码、等级、百分位、碳强度和清洁电力占比，"各候选地区情况不同"的提示，今日用电按等级的分布，以及数据源设置。
+   - 颜色：较清洁为绿色，一般为中性灰，较不清洁为橙色，不使用红色；空心圆点表示推测地点。
+9. **预测时间轴（SPEC 10.4，可选）暂不实现**：WattTime 免费方案没有预测接口，Electricity Maps 的预测也需要付费方案。
+10. **刷新频率**：App 每 5 分钟汇总一次，每个地区最多每 15 分钟请求一次；请求失败时不弹窗，继续显示上一次的值。
+
+### M7 补充：不登录时的数据源调研（2026-10-12）
+
+用户询问能否不注册账号。实测结果如下：
+- WattTime：`/v3/signal-index` 必须登录，不带令牌返回 401。
+- EIA 电网监测网站使用的内部接口（`/electricity/930-api/region_data_by_fuel_type/series_data`）：不需要密钥，覆盖全部候选电网，提供每小时分燃料的发电量。但测试时的最新数据只到约 28 小时之前；接口也没有公开文档。
+- MISO 公开接口 `public-api.misoenergy.org/api/FuelMix`：不需要密钥，5 分钟更新一次，但只覆盖爱荷华和密西西比两个候选地区。
+- ERCOT 公开面板拒绝脚本访问（403）；SPP 的接口无法访问；EIA 正式接口 v2 需要免费密钥。
+
+结论：没有一个不需要账号、又实时、又能覆盖所有候选地区的公开数据源。
+
+**用户决定：年均值加上"最近一天的清洁电力占比"。**
+- 不登录时仍然不显示"此刻"的等级，避免把一天前的数据当成现在。
+- 洁净度页额外显示 EIA 最新发布的 24 小时内的清洁电力占比，并注明截止时间：每个候选地区一列，每家服务商一个加权值。
+- 每个候选地区记录 EIA-930 电网运营区代码（`eia_ba`）：PJM（弗吉尼亚、印第安纳、Azure 东部）、MISO（爱荷华、密西西比）、SWPP（俄克拉荷马）、ERCO（德州两处）、SRP（亚利桑那）、BPAT（俄勒冈）。
+- 清洁电力指太阳能（含 SNB）、风电、水电、核电和地热；储能电池（BAT）既不计入分子也不计入分母，避免重复计算；负值视为 0。只取有数据的最新 24 个小时，少于 12 个小时就不显示。
+- 每个电网运营区最多每 6 小时请求一次，失败时不显示。
+- 使用的是 EIA 网站自己调用的接口（不需要密钥，没有文档），格式变化时这一项会自动消失，不影响其他功能。
+- 实测（2026-10-12）：PJM 44%、MISO 48%、SWPP 66%、ERCO 53%、SRP 44%，数据截至约一天前。
+
+### M7 修正：首页电网板块与真实账号验证（用户反馈，2026-10-12）
+
+1. **真实账号验证通过**：用户登录 WattTime 后，10 个候选地区都通过 `region-from-loc` 查到了区域（例如 `PJM_DC`、`ERCOT_NORTHCENTRAL`、`MISO_WORTHINGTON`、`BPA`、`AZPS`），`signal-index` 能正常返回百分位，三家服务商都显示出了等级。新写入的记录也正确带上了 `clean_level` 和 `grid_source = watttime`。
+2. **"今日用电按电网等级"没有变化的原因**：等级只写给拿到实时数据之后的新记录，登录前的用电只能归入"未记录"（WattTime 免费方案没有历史数据，无法补算）。图表下方加了一句说明，"未记录等级"改为"未记录"。
+3. **首页新增"服务器电网洁净度"板块**：放在活跃对话和图表之间。每家服务商一行，显示圆点、等级、百分位、"各地区情况不同"的提示和更新时间；未登录时显示 EIA 最近一天的清洁电力占比；下方是今日用电按等级的分布条；"查看详情"跳转到洁净度页。分布条组件（`GridLevelBar`）和洁净度页共用。
+4. **第一次加载慢**：
+   - EIA 请求改到后台进行，不再阻塞 WattTime；
+   - 所有候选地区、所有服务商的请求改为并发；
+   - 并发时共用同一次登录（`pendingLogin`）。原来 10 个请求会同时登录，可能触发对方的频率限制。
+   - 第一次获取完成前显示"正在获取…"，不显示"未知"。
+5. **图表柱子低于零线**：数据刷新的过渡动画中出现过负高度。柱高现在限制为不小于 0，生长动画由弹簧曲线改为 easeOut，不会超出最终范围。
+
+### 界面：说明小字改为 ⓘ 弹出（用户反馈，2026-10-12）
+
+用户要求去掉界面上直接显示的说明小字，改为放进说明内容里。
+- 新增通用组件 `InfoTip`：点击 ⓘ 后在弹出框里显示说明。`CardHeader` 增加 `tips` 参数。
+- 首页、洁净度页、电网数据卡、自动导出卡、设置页的说明小字都改为 ⓘ。涉及的内容包括：WattTime 百分位含义、EIA 近一天、年均值来源、"仅提供信息"、今日用电按等级、Electricity Maps、阈值、本机耗电、周报、状态栏改写配置并备份、Codex 状态栏、重新计算。
+- 缓存读取比例的说明并入 Token 卡的 ⓘ。菜单栏弹窗去掉"以上均为估算值"，数值前已有"约"。
+- 洁净度页去掉每家服务商的副标题"服务器电网：较清洁"，它和右侧的大字等级重复，只在没有等级时显示。
+- 地点推测不再写出"（推测地点）"，改由空心圆点表示，含义写进 ⓘ。首页去掉"百分位"和"各地区情况不同"两列：百分位改为把指针停在等级上时显示，"情况不同"并入说明。
+- 「方法说明」页新增"电网洁净度"一节，汇总上述电网说明。
+- 保留："重新打开 App 后生效"这一提示。它只在切换语言后出现，旁边有操作按钮。
+- 终端状态栏里的 "(est.)" 未改动，那是 CLI 输出，不属于这次反馈的范围。
+
+## M8 收尾（2026-10-12）
+
+### 验收
+
+- **本地化**：新增 `scripts/check-strings.py`，检查三项：每个键都有非空的 en 和 zh-Hans；代码中用到的键都在目录里；目录里没有不再使用的键。脚本会排除 SF Symbol 名称、UserDefaults 键和钥匙串账户名，并识别运行时拼接的键（前缀 `"tier.\(…)"`、后缀 `key + ".since"`）。
+  - 删除了 12 个早期版本遗留、已不再使用的键。
+  - 现有 364 个键，检查结果 0 个问题。
+  - 用英文界面截图检查了实时概览、洁净度、通用、计算方法四页，没有未翻译的文字。
+  - 代码中直接写出、不经过目录的文字只有：语言名（"简体中文"、"English"）、单位（Wh、kWh）和品牌名（WattTime），按惯例不翻译。
+- **无障碍**：用 AXUIElement 读取 App 的无障碍树（VoiceOver 读取的是同一棵树），逐页检查了 11 个操作台页面、菜单栏图标和弹出面板。
+  - 菜单栏图标的描述包含今日电量、区间和电网等级。
+  - 弹出面板中的按钮都有标签。活跃对话行会读出标题、工具、状态和电量，提示为"打开这个对话所在的终端或应用"。
+  - 表单控件通过标题元素关联到各自的标签。
+  - 剩下没有标签的只有系统控件：窗口按钮、滚动条部件、时间选择器内部的微调箭头。
+  - 修正：新加的 ⓘ 按钮原来沿用了"计算方法 / How this is calculated"作为标签，改为"说明 / More information"（`info.tip`）。
+  - 减弱动态效果在 M2 / M3 已经处理。
+  - 没有用 VoiceOver 实际走一遍操作流程。
+- **图标**：报告页的左右箭头原来直接写 SF Symbol 名称，改为通过 `Icons.previous` / `Icons.next` 引用。
+- **发布包**：`scripts/build-release.sh` 依次执行：
+  1. 字符串检查和 Core 测试；
+  2. Release 构建（`build/ReleaseDerivedData`）；
+  3. 先对 Helpers 中的内容、再对 App 做临时签名，并执行 `codesign --verify --deep --strict`；
+  4. 运行一次包内 CLI 的 `--version`；
+  5. 用 `ditto` 打包为 `dist/AI-Electricity-<版本>.zip`，同时生成 sha256。
+  
+  验证结果：zip 约 11 MB，App 和 CLI 都是 x86_64 加 arm64 通用二进制，签名为 adhoc，解压后 CLI 和 App 都能运行。`dist/` 已加入 `.gitignore`。
+
+### 决定
+
+1. **METHODOLOGY.md**（`docs/`，中英双语）：
+   - 内容：估算范围、三种日志的 token 计数方式、公式、系数表（含来源和外推关系）、模型分级表、区间、碳排、电网洁净度（WattTime、EIA、eGRID、Electricity Maps）、本机耗电、日常换算和资料来源。
+   - 按 SPEC 5.2 的要求，×0.5 到 ×2 的区间明确标注为假设。
+   - 日常换算的参考值在 `equivalents.json` 中没有填写具体来源，文档中注明它们是大致的常见数值，不是实测值。
+2. **App 内的方法说明页（偏离 SPEC 9.5"内嵌 METHODOLOGY.md"）**：SwiftUI 的 Markdown 支持不包括表格和标题，直接渲染效果很差。所以页面保留原生排版的摘要，数值直接读取打包的 JSON；页面顶部加了两个按钮："打开完整计算方法"（用默认应用打开打包的 `METHODOLOGY.md`）和"在 GitHub 查看"。
+3. **仓库地址**：`Kira-Calc/AI_Electricity` 已经存在（私有），也已设为 git 远程，所以 `AppIdentity.repositoryURL` 去掉了 placeholder 标记。
+   - 新增 `AppIdentity.methodologyURL`，指向 `/blob/main/docs/METHODOLOGY.md`。原来导出报告页脚的链接写成 `<仓库>/docs/METHODOLOGY.md`，在 GitHub 上打不开，已修正。
+   - 仓库公开之前，别人打不开这个链接。
+4. **README**（中英双语）包含：
+   - 功能、系统要求；
+   - 两种安装方式：下载 zip 后用"隐私与安全性 > 仍要打开"或 `xattr` 解除隔离，以及从源码构建；
+   - Claude Code 状态栏、命令行、电网洁净度、隐私、许可证；
+   - Codex 的替代方案（SPEC 8.4）：tmux `status-right`，以及 iTerm2 Python API 状态栏组件脚本。两者都用 `NO_COLOR=1` 关闭 ANSI 颜色代码，因为 tmux 和 iTerm2 的状态栏不解析这些代码。
+   - **tmux 和 iTerm2 示例未实际测试**：本机没有安装这两个程序。只验证了 `NO_COLOR=1 aie statusline < /dev/null` 输出纯文本，以及 iTerm2 脚本的 Python 语法。README 中已注明。
+5. **App 内说明的一处修正**：EIA 的清洁电力代码实际计入了地热（`GEO`），说明文字原来漏写了，已补上。
+6. **未做**：Apple 签名和公证（SPEC 15.1 明确暂不做），以及 GitHub Release 的上传（需要推送，由用户决定）。
+
+## 0.1.0 测试版：更名 PowerBoard、换算轮换、图标与发布（用户要求，2026-10-12）
+
+1. **更名为 PowerBoard**（用户决定，替代 SPEC 2.2 中的临时名称）：
+   - 显示名 `PowerBoard`；
+   - Bundle ID `io.github.kira-calc.powerboard`（按 GitHub Pages 域名 kira-calc.github.io 反写）；
+   - 数据目录 `~/Library/Application Support/PowerBoard`；
+   - CLI 名 `powerboard`。原来的 `aie` 是 "AI Electricity" 的缩写，一并更换。
+   - XcodeGen 项目和 scheme 改为 `PowerBoard`。CLI 的 target 名为 `PowerBoardCLI`，产物名仍是 `powerboard`：macOS 文件系统默认不区分大小写，`PowerBoard` 和 `powerboard` 两个 target 的中间目录会冲突。
+   - GitHub 仓库改名为 `Kira-Calc/PowerBoard`。
+   - 保留不改的有两处：Swift 包 `ElectricityCore` 是内部模块名，不是产品名；SPEC.md 和本文件中早期的记录属于历史，按规则不修改（CLAUDE.md 禁止修改 SPEC）。
+2. **旧数据迁移**（`LegacyMigration`，影响用户数据，所以做了迁移而不是直接换目录）：
+   - 首次启动时把旧数据目录整体移动到新目录，把旧偏好设置域复制到新的域，再把钥匙串中的 WattTime 密码和 Electricity Maps 密钥复制到新的 service。
+   - 新位置已经有数据时不覆盖。
+   - 完成后在新偏好中记下 `migration.legacyDone`，以后不再运行。
+   - 已在开发者本机验证：数据、设置和 WattTime 登录都完整迁移。
+   - 读取旧钥匙串项时，macOS 可能询问是否允许访问。
+3. **钥匙串读取移出主线程**（修复）：原来 `GridSettings.configuration` 在启动时于主线程同步读取钥匙串。临时签名的 App 每次重新构建或更新，签名都会改变，macOS 会弹出授权框；在用户回应之前，整个 App（包括菜单栏图标）都卡住。
+   - 现在密码和密钥在后台任务中读取，App 照常启动。
+   - "是否有 Electricity Maps 密钥"改为记录在偏好设置里（`grid.emaps.present`）。
+4. **日常换算**：
+   - 从 8 项扩充到 16 项，新增四类：家电、食物热量、数字服务、家庭用电。新增项目包括汉堡、巨无霸、罐装可乐、吹风机、Gemini 和 ChatGPT 单次提问、在线视频、美国家庭日均用电。
+   - 每一项在 `equivalents.json` 中都写明依据和来源。来源分别是 EPA、USDA FoodData Central（SR Legacy FDC ID）、IEA、arXiv:2508.15734、麦当劳和可口可乐的官方营养数据，以及物理定义。新增测试要求每项都有来源。
+   - 修正了三个旧值：
+     - 手机充电由 15 Wh 改为 EPA 的 19 Wh；
+     - 烧水由 100 Wh 改为物理下限 92.9 Wh；
+     - 食物按 USDA 实际份量重算，例如香蕉改为 126 g 的 NLEA 份量。
+   - 苹果因为 USDA 接口限流，未能核实数值，没有加入。
+   - 轮换：`EquivalentSelector.rotating` 用 SplitMix64 种子生成器打乱候选项，种子为"当前时间 / 8 秒"。同一个 8 秒内显示保持不变，之后换一组。每组优先包含一项食物和一项非食物，只选次数在 1 到 100,000 之间的项目，可选项太少时退回原来的固定选择。弹出面板显示 2 项，首页显示 3 项；减弱动态效果时切换不带动画。年度总结仍使用固定的最佳匹配。
+   - 次数在 10 以上时加千分位，例如"约 40,162 次"。
+5. **图标**：`scripts/make-icon.swift` 用 CoreGraphics 绘制写实风格的插头：白色圆角方形底、深色塑料插头体、黄铜插脚、带应力护套的电线，插头正面有一个橙色闪电。不使用任何外部素材或生成图片，没有版权问题。脚本生成 16 到 1024 像素的全部尺寸，README 使用其中 256 像素的版本。
+6. **About 页**：版本号后标注"测试版"（`AppIdentity.isBeta`）。隐私文案原来写着"完全在本机运行……没有账号"，加入电网数据后已经不准确，改为说明会联网请求 EIA，以及设置后才会请求的 WattTime 和 Electricity Maps。
+7. **README**：
+   - `README.md` 改为中文主文档，包含用途、动机、方法要点、区间假设、局限性、16 项换算的来源表，以及 16 条编号参考文献。
+   - 每篇 arXiv 论文的编号、标题和第一作者都用 arXiv API 核对过，de Vries 2023 用 Crossref 核对了 DOI。
+   - 英文版移到 `README.en.md`。
+8. **个人数据**：
+   - 本文件中开发者本机的用量数字（token 总数、日志文件数、事件数）改为不含具体数量的描述，一处由用户名派生的示例改为占位写法。
+   - 公开前把 git 历史合并为一个提交，作者改为 GitHub noreply 邮箱，原来的历史只保留在本地备份分支中。

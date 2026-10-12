@@ -34,5 +34,6 @@ mkdir -p dist
 zip="dist/${name// /-}-${version}.zip"
 rm -f "$zip"
 ditto -c -k --keepParent "$app" "$zip"
-shasum -a 256 "$zip" | tee "$zip.sha256"
+# Checksum file names the zip without a folder, so `shasum -c` works next to the download.
+(cd dist && shasum -a 256 "$(basename "$zip")" | tee "$(basename "$zip").sha256")
 echo "Built $zip"

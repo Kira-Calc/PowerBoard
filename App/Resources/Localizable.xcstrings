@@ -18,23 +18,6 @@
         }
       }
     },
-    "about.notTracked": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chats on claude.ai and in the Claude desktop app are not counted: they do not write token logs on this Mac."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "claude.ai 网页版和 Claude 桌面应用的普通聊天不会统计：它们不在本机写入 token 日志。"
-          }
-        }
-      }
-    },
     "about.notices": {
       "extractionState": "manual",
       "localizations": {
@@ -48,23 +31,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "第三方声明"
-          }
-        }
-      }
-    },
-    "about.privacy": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Logs are read on this Mac only, and conversation content is not read. No analytics or telemetry. Grid data is fetched from the US EIA, and from WattTime or Electricity Maps if you set them up."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "日志只在本机读取，不读取对话内容。没有统计分析或遥测。电网数据从美国 EIA 获取；设置了 WattTime 或 Electricity Maps 后，也会从这两个服务获取。"
           }
         }
       }

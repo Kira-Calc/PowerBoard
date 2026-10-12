@@ -79,13 +79,6 @@ struct MethodologyPage: View {
 
 /// Version, license and third-party notices (SPEC 9.5).
 struct AboutPage: View {
-    private var notices: String {
-        guard let url = Bundle.main.url(forResource: "THIRD_PARTY_NOTICES", withExtension: "md"),
-              let text = try? String(contentsOf: url, encoding: .utf8)
-        else { return "" }
-        return text
-    }
-
     private var version: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? AppIdentity.version
     }
@@ -93,26 +86,27 @@ struct AboutPage: View {
     var body: some View {
         PageContainer {
             Card {
-                HStack(spacing: 12) {
+                VStack(spacing: 10) {
                     Image(nsImage: NSApp.applicationIconImage)
                         .resizable()
-                        .frame(width: 64, height: 64)
+                        .frame(width: 96, height: 96)
                         .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(verbatim: AppIdentity.displayName).font(.title2.weight(.semibold))
-                        Text(String(format: String(localized: AppIdentity.isBeta ? "about.version.beta" : "about.version"), version)).foregroundStyle(.secondary)
+                    Text(verbatim: AppIdentity.displayName).font(.title.weight(.semibold))
+                    Text(String(format: String(localized: AppIdentity.isBeta ? "about.version.beta" : "about.version"), version))
+                        .foregroundStyle(.secondary)
+                    Text("about.license").font(.callout).foregroundStyle(.secondary)
+                    HStack(spacing: 12) {
+                        Link(destination: URL(string: AppIdentity.repositoryURL)!) { Text(verbatim: "GitHub") }
+                        Button("about.notices") {
+                            if let url = Bundle.main.url(forResource: "THIRD_PARTY_NOTICES", withExtension: "md") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
                     }
+                    .padding(.top, 4)
                 }
-                Text("about.license").fixedSize(horizontal: false, vertical: true)
-                Text("about.notTracked").foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Text("about.privacy").foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
-            Card {
-                CardHeader(icon: Icons.bookOpen, color: .gray, title: "about.notices")
-                Text(verbatim: notices)
-                    .font(.caption.monospaced())
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
             }
         }
     }

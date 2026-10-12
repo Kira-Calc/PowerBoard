@@ -64,36 +64,27 @@ context.setStrokeColor(color(0x000000, 0.08))
 context.setLineWidth(3)
 context.strokePath()
 
-// MARK: Cable, drawn first so the plug body covers its end.
+// MARK: The plug is drawn upright in its own coordinates, then turned 45 degrees (prongs to the upper right)
+// and clipped to the tile, so the straight cable runs off the lower left edge.
 
-let cable = CGMutablePath()
-cable.move(to: CGPoint(x: 512, y: 640))
-cable.addCurve(to: CGPoint(x: 400, y: 840), control1: CGPoint(x: 512, y: 760), control2: CGPoint(x: 430, y: 760))
-cable.addCurve(to: CGPoint(x: 260, y: 1000), control1: CGPoint(x: 370, y: 920), control2: CGPoint(x: 300, y: 960))
 context.saveGState()
 context.addPath(tilePath)
 context.clip()
-// Shadow on the tile.
+context.translateBy(x: 548, y: 470)
+context.rotate(by: .pi / 4)
+context.translateBy(x: -512, y: -445)
+
+// MARK: Cable: a straight cylinder, drawn first so the plug body covers its end.
+
+let cable = CGRect(x: 483, y: 640, width: 58, height: 900)
 context.saveGState()
-context.translateBy(x: 10, y: 16)
-context.addPath(cable)
-context.setLineWidth(58)
-context.setLineCap(.round)
-context.setStrokeColor(color(0x000000, 0.12))
-context.strokePath()
+context.setShadow(offset: CGSize(width: 0, height: -14), blur: 24, color: color(0x000000, 0.22))
+context.addPath(CGPath(rect: cable, transform: nil))
+context.setFillColor(color(0x1C1D20))
+context.fillPath()
 context.restoreGState()
-// Cable body with a cylindrical highlight, built from strokes of decreasing width.
-for (width, hex, alpha) in [(58.0, 0x1C1D20, 1.0), (46.0, 0x2C2E33, 1.0), (30.0, 0x3B3E45, 1.0), (12.0, 0x6B707A, 0.55)] as [(CGFloat, UInt32, CGFloat)] {
-    context.saveGState()
-    if width == 12 { context.translateBy(x: -9, y: -4) }
-    context.addPath(cable)
-    context.setLineWidth(width)
-    context.setLineCap(.round)
-    context.setStrokeColor(color(hex, alpha))
-    context.strokePath()
-    context.restoreGState()
-}
-context.restoreGState()
+linear([(0, color(0x111215)), (0.25, color(0x3B3E45)), (0.4, color(0x6B707A)), (0.55, color(0x2C2E33)), (1, color(0x0E0F11))],
+       from: CGPoint(x: 483, y: 0), to: CGPoint(x: 541, y: 0), in: CGPath(rect: cable, transform: nil))
 
 // Strain relief: a short tapered sleeve between body and cable.
 let sleeve = CGMutablePath()
@@ -207,6 +198,8 @@ context.addPath(bolt)
 context.setStrokeColor(color(0xFFE2A8, 0.7))
 context.setLineWidth(2)
 context.strokePath()
+
+context.restoreGState()
 
 let image = context.makeImage()!
 let rep = NSBitmapImageRep(cgImage: image)

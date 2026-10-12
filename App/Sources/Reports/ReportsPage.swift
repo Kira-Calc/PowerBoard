@@ -146,7 +146,7 @@ struct ReportsPage: View {
         }
         HStack(alignment: .top, spacing: 16) {
             Card(fillHeight: true) {
-                CardHeader(icon: Icons.leaf, color: Palette.clean, title: "reports.energyMix")
+                CardHeader(icon: Icons.pieChart, color: Palette.clean, title: "reports.energyMix")
                 if let mix = report.energyMix {
                     ReportEnergyMixView(mix: mix, strings: strings, donut: 130)
                 } else {

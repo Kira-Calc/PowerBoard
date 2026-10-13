@@ -13,7 +13,7 @@ struct PopoverView: View {
         VStack(alignment: .leading, spacing: 14) {
             if !model.activeSessions.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    SectionHeader(icon: Icons.terminalWindow, color: .blue, title: "sessions.title")
+                    SectionHeader(icon: Icons.terminalWindow, title: "sessions.title")
                     ActiveSessionsList(sessions: model.activeSessions, settings: settings, compact: true, onJump: closePopover)
                         .padding(.horizontal, -8)
                 }
@@ -44,17 +44,20 @@ struct PopoverView: View {
     }
 }
 
-/// Section title with a colored icon badge, and an optional value on the trailing side.
+/// Section title with its symbol in the text color, and an optional value on the trailing side.
+/// The symbol sits in a badge-wide slot so indented rows below line up with the title.
 private struct SectionHeader<Trailing: View>: View {
     let icon: Icon
-    let color: Color
     let title: LocalizedStringKey
     var serverTag = false
     @ViewBuilder var trailing: Trailing
 
     var body: some View {
         HStack(spacing: 8) {
-            IconBadge(icon, color: color)
+            Image(systemName: icon.badge)
+                .font(.system(size: 15, weight: .semibold))
+                .frame(width: IconBadge.defaultSize, height: IconBadge.defaultSize)
+                .accessibilityHidden(true)
             Text(title)
             if serverTag { ServerTag() }
             Spacer(minLength: 8)
@@ -65,8 +68,8 @@ private struct SectionHeader<Trailing: View>: View {
 }
 
 extension SectionHeader where Trailing == EmptyView {
-    init(icon: Icon, color: Color, title: LocalizedStringKey, serverTag: Bool = false) {
-        self.init(icon: icon, color: color, title: title, serverTag: serverTag) { EmptyView() }
+    init(icon: Icon, title: LocalizedStringKey, serverTag: Bool = false) {
+        self.init(icon: icon, title: title, serverTag: serverTag) { EmptyView() }
     }
 }
 
@@ -79,7 +82,7 @@ private struct EnergySection: View {
         let energy = settings.displayedEnergy(today)
         let range = settings.formatEnergy(energy.total)
         VStack(alignment: .leading, spacing: 4) {
-            SectionHeader(icon: Icons.lightning, color: Palette.energy,
+            SectionHeader(icon: Icons.lightning,
                           title: LocalizedStringKey(settings.dayKey(energy.includesLocal ? "popover.today.energyWithLocal" : "popover.today.energy")),
                           serverTag: !energy.includesLocal)
             HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -136,7 +139,7 @@ private struct TokenSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            SectionHeader(icon: Icons.coins, color: Palette.tokens, title: "popover.tokens") {
+            SectionHeader(icon: Icons.coins, title: "popover.tokens") {
                 RollingText(ValueFormatting.tokens(tokens.total))
             }
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 2) {
@@ -166,7 +169,7 @@ private struct CarbonSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            SectionHeader(icon: Icons.cloud, color: Palette.carbon, title: "popover.carbon") {
+            SectionHeader(icon: Icons.cloud, title: "popover.carbon") {
                 RollingText(String(format: String(localized: "popover.carbon.value"), ValueFormatting.carbon(grams: grams).text, Units.co2e))
             }
             Text("popover.carbon.basis")
@@ -236,7 +239,7 @@ private struct SourceSection: View {
             Row(id: source.rawValue, name: SourceText.name(source), wh: today.energyWhMid(for: source), color: Palette.source(source))
         }
         VStack(alignment: .leading, spacing: 8) {
-            SectionHeader(icon: Icons.terminalWindow, color: Palette.neutral, title: "popover.bySource")
+            SectionHeader(icon: Icons.terminalWindow, title: "popover.bySource")
             let maxWh = max(rows.map(\.wh).max() ?? 0, 0.000_001)
             Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
                 ForEach(rows) { row in
@@ -271,7 +274,7 @@ private struct EmptyState: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            SectionHeader(icon: Icons.lightning, color: Palette.energy, title: LocalizedStringKey(settings.dayKey("popover.today.energy")))
+            SectionHeader(icon: Icons.lightning, title: LocalizedStringKey(settings.dayKey("popover.today.energy")))
             Text(model.isBackfilling ? "popover.loading" : LocalizedStringKey(settings.dayKey("empty.today")))
                 .font(.callout)
                 .foregroundStyle(.secondary)

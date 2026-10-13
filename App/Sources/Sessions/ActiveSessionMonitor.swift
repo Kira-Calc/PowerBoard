@@ -41,6 +41,10 @@ struct ActiveSession: Identifiable, Hashable, Sendable {
 @MainActor
 final class ActiveSessionMonitor {
     private static let interval: Duration = .seconds(2)
+    /// At most this many conversations are listed.
+    nonisolated static let maxShown = 4
+    /// A finished conversation leaves the list this long after its last turn, even if its process is still open.
+    nonisolated static let finishedTimeout: TimeInterval = 30 * 60
     /// How long the menu bar shows the completion alert.
     static let alertDuration: Duration = .seconds(8)
 
@@ -75,11 +79,23 @@ final class ActiveSessionMonitor {
         let sessions = await Task.detached { Self.collect(store: store, titles: titles) }.value
         let finished = sessions.filter { previous[$0.sessionID] == .running && $0.status == .done }
         previous = Dictionary(uniqueKeysWithValues: sessions.map { ($0.sessionID, $0.status) })
-        if model.activeSessions != sessions { model.activeSessions = sessions }
+        // Completion alerts above use every session; the list shows only the recent ones.
+        let shown = Self.shown(sessions, now: Date())
+        if model.activeSessions != shown { model.activeSessions = shown }
         if let session = finished.first {
             if settings.completionAlertEnabled { showAlert(for: session) }
             if settings.completionNotificationEnabled { CompletionNotifier.post(session) }
         }
+    }
+
+    /// The listed conversations: finished ones drop out after `finishedTimeout`, then the first `maxShown` in order
+    /// (running, then waiting for the user, then finished; most recent first).
+    nonisolated static func shown(_ sessions: [ActiveSession], now: Date) -> [ActiveSession] {
+        let recent = sessions.filter { session in
+            guard session.status == .done, let since = session.statusSince else { return true }
+            return now.timeIntervalSince(since) < finishedTimeout
+        }
+        return Array(recent.prefix(maxShown))
     }
 
     private func showAlert(for session: ActiveSession) {

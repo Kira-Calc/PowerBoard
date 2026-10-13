@@ -111,6 +111,8 @@ struct DashboardView: View {
             let section = navigation.selection ?? .overview
             page(for: section)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                // Content scrolling up under the title must not show through behind the page title.
+                .modifier(SolidTitleEdge())
                 .toolbar {
                     // Page title in the title bar, level with the window buttons, as in System Settings.
                     if #available(macOS 26.0, *) {
@@ -244,6 +246,20 @@ private struct HideWindowTitle: ViewModifier {
             content.toolbar(removing: .title)
         } else {
             content.navigationTitle("")
+        }
+    }
+}
+
+/// A solid strip under the title bar, so scrolled content is covered instead of mixing with the page title.
+/// macOS 26 draws it with a hard scroll edge; earlier versions get an opaque toolbar background.
+private struct SolidTitleEdge: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content.scrollEdgeEffectStyle(.hard, for: .top)
+        } else {
+            content
+                .toolbarBackground(.visible, for: .windowToolbar)
+                .toolbarBackground(Color(nsColor: .windowBackgroundColor), for: .windowToolbar)
         }
     }
 }

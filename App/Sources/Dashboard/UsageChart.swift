@@ -191,15 +191,16 @@ struct UsageChartCard: View {
         selectionRaw = ids.isEmpty ? Self.totalID : ids.sorted().joined(separator: ",")
     }
 
+    /// Wraps onto more lines in a narrow window; each checkbox keeps its name on one line.
     private var seriesToggles: some View {
-        HStack(spacing: 16) {
-            toggle(totalSeries, isOn: showsTotal)
+        FlowRow(spacing: 16, lineSpacing: 8) {
+            toggle(totalSeries, isOn: showsTotal).fixedSize()
             ForEach(availableSeries) { item in
-                toggle(item, isOn: !showsTotal && selectedIDs.contains(item.id))
+                toggle(item, isOn: !showsTotal && selectedIDs.contains(item.id)).fixedSize()
             }
-            Spacer()
         }
         .font(.callout)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func toggle(_ item: Series, isOn: Bool) -> some View {

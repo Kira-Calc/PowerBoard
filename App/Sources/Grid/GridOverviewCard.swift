@@ -92,7 +92,8 @@ struct GridLevelBar: View {
                 .animation(.smooth, value: byLevel.values.reduce(0, +))
             }
             .frame(height: compact ? 8 : 10)
-            HStack(spacing: 16) {
+            // Wraps onto a second line in a narrow window instead of breaking values like "1.64 kWh".
+            FlowRow(spacing: 16, lineSpacing: 6) {
                 ForEach(levels, id: \.self) { level in
                     HStack(spacing: 5) {
                         if level == nil {
@@ -103,6 +104,7 @@ struct GridLevelBar: View {
                         Text(level == nil ? String(localized: "grid.today.noLevel") : GridText.level(level))
                         RollingText(settings.formatEnergy(byLevel[level] ?? 0).text).foregroundStyle(.secondary)
                     }
+                    .fixedSize()
                     .font(compact ? .caption : .callout)
                 }
             }

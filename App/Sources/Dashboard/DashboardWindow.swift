@@ -121,8 +121,6 @@ struct DashboardView: View {
                     }
                 }
         }
-        // The sidebar always stays open: no collapse button, and the window cannot get narrow enough to hide it.
-        .navigationSplitViewStyle(.balanced)
         .modifier(HideWindowTitle())
         .frame(minWidth: DashboardWindowController.minimumSize.width, maxWidth: DashboardWindowController.maximumSize.width,
                minHeight: DashboardWindowController.minimumSize.height, maxHeight: DashboardWindowController.maximumSize.height)

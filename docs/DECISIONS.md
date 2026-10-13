@@ -733,3 +733,5 @@ Codex 部分 ccusage 的合计比本应用高约 9%，差值和分叉会话继�
 2. **跳转到桌面版**：只把 App 调到前台（`NSRunningApplication.activate()`）时，如果它的窗口已经关闭或最小化，不会出现任何窗口。改为 `NSWorkspace.openApplication(at:configuration:)`，效果等同于点击 Dock 图标，会重新打开窗口。
    已用辅助功能接口模拟点击验证：点 Codex · Desktop 的行，前台变为 `com.openai.codex`；点 Claude Desktop · Code 的行，前台变为 `com.anthropic.claudefordesktop`。
 3. **Codex 桌面版检测有延迟**：原来活跃状态要等日志被读进数据库后才能得到。现在每 2 秒直接查看今天和昨天的 Codex 日志目录：30 分钟内修改过、来源不是 CLI 的日志，读取第一行（会话 ID、来源、工作目录）后加入活跃对话；15 秒内有写入就显示为"运行中"。CLI 会话仍按进程判断，因为进程能准确反映它何时结束。
+
+- **侧边栏贴边**（用户反馈）：上一版为了固定侧边栏加了 `.navigationSplitViewStyle(.balanced)`，导致侧边栏不再是悬浮面板，左侧和底部紧贴窗口边缘。去掉这个样式后恢复悬浮面板。侧边栏仍由 `columnVisibility: .constant(.all)` 固定，不会被折叠。首页电网卡的等级图例改用 `FlowRow` 自动换行，避免把 "1.64 kWh" 这样的数值拆成两行。

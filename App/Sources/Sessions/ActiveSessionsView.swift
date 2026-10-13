@@ -85,36 +85,31 @@ private struct ActiveSessionRow: View {
     }
 }
 
-/// Blue and pulsing while running, green when finished, orange when waiting for the user.
+/// A plain dot when the turn has finished (green) or waits for the user (orange), and a spinning ring, like a page
+/// loading indicator, while the agent works. No glow or pulse. With Reduce Motion the ring does not spin.
 struct StatusLight: View {
     let status: ActiveSession.Status
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var pulse = false
-
-    private var color: Color {
-        switch status {
-        case .running: .blue
-        case .done: Palette.clean
-        case .waiting: .orange
-        }
-    }
+    @State private var spinning = false
 
     var body: some View {
-        ZStack {
-            if status == .running && !reduceMotion {
+        Group {
+            switch status {
+            case .running:
                 Circle()
-                    .fill(color.opacity(0.35))
-                    .frame(width: 16, height: 16)
-                    .scaleEffect(pulse ? 1 : 0.5)
-                    .opacity(pulse ? 0 : 1)
+                    .trim(from: 0, to: 0.72)
+                    .stroke(Color.secondary, style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
+                    .frame(width: 10, height: 10)
+                    .rotationEffect(.degrees(spinning ? 360 : 0))
                     .onAppear {
-                        withAnimation(.easeOut(duration: 1.2).repeatForever(autoreverses: false)) { pulse = true }
+                        guard !reduceMotion else { return }
+                        withAnimation(.linear(duration: 0.9).repeatForever(autoreverses: false)) { spinning = true }
                     }
+            case .done:
+                Circle().fill(Palette.clean).frame(width: 8, height: 8)
+            case .waiting:
+                Circle().fill(Color.orange).frame(width: 8, height: 8)
             }
-            Circle()
-                .fill(color)
-                .frame(width: 8, height: 8)
-                .shadow(color: color.opacity(0.6), radius: 3)
         }
         .frame(width: 16, height: 16)
         .accessibilityHidden(true)

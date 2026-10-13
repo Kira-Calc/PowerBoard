@@ -123,9 +123,9 @@ struct DashboardView: View {
                     }
                 }
         }
+        // No frame around the split view: wrapped in one, it no longer reaches the window edges and macOS stops
+        // insetting the sidebar as a floating panel. The window itself enforces the size limits.
         .modifier(HideWindowTitle())
-        .frame(minWidth: DashboardWindowController.minimumSize.width, maxWidth: DashboardWindowController.maximumSize.width,
-               minHeight: DashboardWindowController.minimumSize.height, maxHeight: DashboardWindowController.maximumSize.height)
     }
 
     private func pageTitle(_ section: DashboardSection) -> some View {

@@ -158,6 +158,23 @@ import Testing
     }
 }
 
+@Suite struct ReceiptGridLevelTests {
+    @Test func gridLevelsListEveryLevelWithShares() throws {
+        let model = ReceiptFixtures.model(ReceiptFixtures.report(period: .week), language: .zh)
+        let levels = try #require(model.gridLevels)
+        #expect(levels.map(\.label) == ["较清洁", "一般", "较不清洁", "未记录"])
+        #expect(abs(levels.reduce(0) { $0 + $1.share } - 1) < 0.000_001)
+        #expect(levels.map(\.percent) == ["30%", "45%", "15%", "10%"])
+        #expect(model.cleanliness == nil)
+    }
+
+    @Test func noGridSectionWithoutLevelsOrOnYearReceipts() {
+        #expect(ReceiptFixtures.model(ReceiptFixtures.report(period: .day, gridLevels: false), language: .en).gridLevels == nil)
+        #expect(ReceiptFixtures.model(ReceiptFixtures.report(period: .year), language: .en).gridLevels == nil)
+        #expect(ReceiptFixtures.model(ReceiptFixtures.report(period: .day, lines: []), language: .en).gridLevels == nil)
+    }
+}
+
 @MainActor
 @Suite struct ReceiptRenderingTests {
     @Test func pngIsTwiceTheDotWidth() throws {

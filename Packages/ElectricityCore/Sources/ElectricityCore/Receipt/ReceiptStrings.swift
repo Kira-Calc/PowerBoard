@@ -19,7 +19,7 @@ public struct ReceiptStrings: Sendable {
         case subtitle, customer, serial, kind, period, timeZone, printed, cashier
         case item, tokens, energyWh, others(Int)
         case tokenMix, input, output, cacheWrite, cacheRead, cacheNote
-        case energySubtotal, range, carbon, basis, basisGridAverage, cleanliness, cleanShare(Int)
+        case energySubtotal, range, carbon, basis, basisGridAverage, cleanliness, cleanShare(Int), gridLevels
         case dailyEnergy, monthlyEnergy, peakDay(String)
         case equivalents, noUsageToday, noUsagePeriod
         case total, disclaimer, methodHint, foodNote, thanks
@@ -51,6 +51,7 @@ public struct ReceiptStrings: Sendable {
             case .basisGridAverage: "Grid average"
             case .cleanliness: "Grid"
             case .cleanShare(let percent): "\(percent)% clean"
+            case .gridLevels: "Server grid cleanliness"
             case .dailyEnergy: "Energy by day"
             case .monthlyEnergy: "Energy by month"
             case .peakDay(let value): "Peak \(value)"
@@ -92,6 +93,7 @@ public struct ReceiptStrings: Sendable {
             case .basisGridAverage: "电网平均"
             case .cleanliness: "洁净度"
             case .cleanShare(let percent): "清洁电力 \(percent)%"
+            case .gridLevels: "服务器电网洁净度"
             case .dailyEnergy: "每日用电"
             case .monthlyEnergy: "每月用电"
             case .peakDay(let value): "最高 \(value)"

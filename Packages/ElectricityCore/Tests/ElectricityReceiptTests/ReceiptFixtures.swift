@@ -38,7 +38,11 @@ enum ReceiptFixtures {
         }
     }
 
-    static func report(period: ReportPeriod, lines: [Line] = standardLines, projects: [String] = [], rolling: Bool = false) -> Report {
+    /// Shares of the energy at each grid level in fixtures that record levels.
+    static let gridShares: [GridLevel?: Double] = [.cleaner: 0.3, .typical: 0.45, .lessClean: 0.15, nil: 0.1]
+
+    static func report(period: ReportPeriod, lines: [Line] = standardLines, projects: [String] = [], rolling: Bool = false,
+                       gridLevels: Bool = true) -> Report {
         let interval = period.interval(containing: date("2026-10-14T12:00:00+08:00"), calendar: calendar)
         func item(_ key: String, _ source: UsageSource?, _ lines: [Line]) -> ReportBreakdownItem {
             let wh = lines.reduce(0) { $0 + $1.wh }
@@ -62,7 +66,8 @@ enum ReceiptFixtures {
             totals: UsageTotals(eventCount: lines.count, tokens: total.tokens, energyWh: total.energyWh, co2GramsMid: total.co2GramsMid),
             previousTotals: .zero, bySource: sources, byModel: models, byToolModel: models,
             byProject: projects.map { item($0, nil, lines) }, trend: trend, peak: trend.max { $0.serverWh < $1.serverWh },
-            sessionCount: 2, gridIntensities: [384], factorVersions: ["test"], energyMix: nil, energyByGridLevel: [:]
+            sessionCount: 2, gridIntensities: [384], factorVersions: ["test"], energyMix: nil,
+            energyByGridLevel: gridLevels && !lines.isEmpty ? gridShares.mapValues { $0 * total.energyWh.mid } : [:]
         )
     }
 

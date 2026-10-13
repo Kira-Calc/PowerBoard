@@ -51,6 +51,15 @@ public struct ReceiptModel: Sendable, Hashable {
         public var shares: [Double]
     }
 
+    /// One grid level in the cleanliness section: its share of the energy, as on the Overview card.
+    public struct GridLevelLine: Sendable, Hashable {
+        public var level: GridLevel?
+        public var label: String
+        public var energy: String
+        public var percent: String
+        public var share: Double
+    }
+
     public struct Bars: Sendable, Hashable {
         public var title: String
         /// Mid energy per bar, in Wh.
@@ -87,8 +96,11 @@ public struct ReceiptModel: Sendable, Hashable {
     public var energyRange: String
     public var carbon: String
     public var basis: String
-    /// Grid cleanliness (M7): the level most of the energy ran at, or the clean share of the estimated mix.
+    /// Grid cleanliness (M7) as one line: the clean share of the estimated mix. Left out when `gridLevels` is shown.
     public var cleanliness: String?
+    /// Energy by the grid level recorded with each record (cleaner, typical, less clean, not recorded), when any
+    /// record has a level. Nil on a year receipt, which stays short.
+    public var gridLevels: [GridLevelLine]?
     public var bars: Bars?
     /// Nil on a year receipt.
     public var equivalents: [Equivalent]?
@@ -134,7 +146,8 @@ public struct ReceiptModel: Sendable, Hashable {
         let carbonValue = ValueFormatting.carbon(grams: report.totals.co2GramsMid)
         carbon = carbonValue.text
         basis = strings(.basisGridAverage)
-        cleanliness = Self.cleanliness(report, strings: strings, reportStrings: reportStrings)
+        gridLevels = report.period == .year ? nil : Self.gridLevels(report, reportStrings: reportStrings)
+        cleanliness = gridLevels == nil ? Self.cleanliness(report, strings: strings, reportStrings: reportStrings) : nil
         totalEnergy = formatted.mid.text
         totalCarbon = "\(carbonValue.text) CO2"
         qrPayload = showsQRCode ? AppIdentity.repositoryURL : nil
@@ -235,6 +248,20 @@ public struct ReceiptModel: Sendable, Hashable {
             return strings(.cleanShare(Int((mix.cleanShare * 100).rounded())))
         }
         return nil
+    }
+
+    /// Cleaner, typical, less clean, then not recorded, with energy and share; nil without any recorded level.
+    static func gridLevels(_ report: Report, reportStrings: ReportStrings) -> [GridLevelLine]? {
+        guard report.hasGridLevels else { return nil }
+        let total = report.energyByGridLevel.values.reduce(0, +)
+        guard total > 0 else { return nil }
+        let levels: [GridLevel?] = [.cleaner, .typical, .lessClean, nil]
+        return levels.map { level in
+            let wh = report.energyByGridLevel[level] ?? 0
+            return GridLevelLine(level: level, label: level.map { reportStrings(.gridLevel($0)) } ?? reportStrings(.unrecordedLevel),
+                                 energy: wh > 0 ? ValueFormatting.energy(wh: wh).text : "0 Wh", percent: "\(Int((wh / total * 100).rounded()))%",
+                                 share: wh / total)
+        }
     }
 
     /// Daily bars on week and month receipts, monthly bars on year receipts; none on a day receipt.

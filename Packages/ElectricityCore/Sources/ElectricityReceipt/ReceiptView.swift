@@ -41,6 +41,10 @@ public struct ReceiptView: View {
                 tokenMix
                 rule()
                 energySection
+                if let levels = model.gridLevels {
+                    rule()
+                    gridSection(levels)
+                }
                 if let bars = model.bars {
                     rule()
                     chart(bars)
@@ -199,6 +203,42 @@ public struct ReceiptView: View {
             if let cleanliness = model.cleanliness {
                 valueRow(strings(.cleanliness), cleanliness, indented: true)
             }
+        }
+    }
+
+    /// Energy by grid level, like the Overview card: one bar split by share, then a line per level. Darker
+    /// patterns mean less clean energy; no grey, so it survives the 1-bit print.
+    private func gridSection(_ levels: [ReceiptModel.GridLevelLine]) -> some View {
+        let patterns = levels.map { ReceiptView.gridPattern($0.level) }
+        let percentColumns = 5
+        return VStack(alignment: .leading, spacing: 0) {
+            cell(strings(.gridLevels), layout.columns)
+            ReceiptTokenBar(shares: levels.map(\.share), columns: layout.columns - ReceiptLayout.indent, patterns: patterns)
+                .frame(height: 22)
+                .padding(.leading, ReceiptLayout.points(ReceiptLayout.indent))
+                .padding(.vertical, 6)
+            ForEach(Array(levels.enumerated()), id: \.offset) { index, line in
+                let energyColumns = max(ReceiptText.columns(line.energy), 10)
+                HStack(spacing: 0) {
+                    spacer(ReceiptLayout.indent)
+                    ReceiptPatternSwatch(pattern: patterns[index])
+                        .frame(width: ReceiptLayout.columnWidth * 1.5, height: 14)
+                        .frame(width: ReceiptLayout.points(2), alignment: .leading)
+                    cell(line.label, layout.columns - ReceiptLayout.indent - 2 - energyColumns - percentColumns)
+                    cell(line.energy, energyColumns, .trailing)
+                    cell(line.percent, percentColumns, .trailing)
+                }
+            }
+        }
+    }
+
+    /// Cleaner is blank paper, typical dotted, less clean solid black; not recorded is hatched.
+    static func gridPattern(_ level: GridLevel?) -> ReceiptPattern {
+        switch level {
+        case .cleaner: .blank
+        case .typical: .dotted
+        case .lessClean: .solid
+        case nil: .hatched
         }
     }
 
@@ -372,8 +412,8 @@ struct ReceiptPatternSwatch: View {
 struct ReceiptTokenBar: View {
     let shares: [Double]
     let columns: Int
-
-    static let patterns: [ReceiptPattern] = [.solid, .hatched, .dotted, .blank]
+    /// One fill per share, in order: input, output, cache write and cache read unless given.
+    var patterns: [ReceiptPattern] = [.solid, .hatched, .dotted, .blank]
 
     /// Columns per segment: rounded down, then the remainder goes to the largest fractions so the sum is exact.
     /// A part that is not zero keeps at least one column, taken from the widest segment, so a small share
@@ -400,7 +440,7 @@ struct ReceiptTokenBar: View {
             for (index, width) in widths.enumerated() where width > 0 {
                 let rect = CGRect(x: x, y: 0, width: ReceiptLayout.points(width), height: size.height)
                 var segment = context
-                Self.patterns[index].draw(in: &segment, rect: rect)
+                patterns[index].draw(in: &segment, rect: rect)
                 if x > 0 {
                     context.fill(Path(CGRect(x: x - 1, y: 0, width: 2, height: size.height)), with: .color(.black))
                 }

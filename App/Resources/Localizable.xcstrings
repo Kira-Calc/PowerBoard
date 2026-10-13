@@ -1744,13 +1744,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Image, landscape (PNG 1600 x 900)"
+            "value": "Image, landscape (PNG, 1684 px wide)"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "图片，横版（PNG 1600 x 900）"
+            "value": "图片，横版（PNG，宽 1684 像素）"
           }
         }
       }
@@ -1761,13 +1761,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Image, portrait (PNG 1080 x 1350)"
+            "value": "Image, portrait (PNG, 1190 px wide)"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "图片，竖版（PNG 1080 x 1350）"
+            "value": "图片，竖版（PNG，宽 1190 像素）"
           }
         }
       }
@@ -1785,6 +1785,159 @@
           "stringUnit": {
             "state": "translated",
             "value": "隐藏项目名"
+          }
+        }
+      }
+    },
+    "export.include": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "包含内容"
+          }
+        }
+      }
+    },
+    "export.include.byModel": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "By model"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按模型"
+          }
+        }
+      }
+    },
+    "export.include.byProject": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "By project"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按项目"
+          }
+        }
+      }
+    },
+    "export.include.byTool": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "By tool"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按工具"
+          }
+        }
+      }
+    },
+    "export.include.energyMix": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Energy mix and grid"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "能源构成与电网洁净度"
+          }
+        }
+      }
+    },
+    "export.include.method": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Method"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "计算方法"
+          }
+        }
+      }
+    },
+    "export.include.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The summary (energy, carbon, tokens, sessions) is always included."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "概览（耗电、碳排、Token、对话数）始终包含。"
+          }
+        }
+      }
+    },
+    "export.include.noteCSV": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CSV holds raw records; only the project column can be left out."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CSV 是逐条记录，只能选择是否包含项目列。"
+          }
+        }
+      }
+    },
+    "export.include.trends": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trend charts"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "趋势图"
           }
         }
       }

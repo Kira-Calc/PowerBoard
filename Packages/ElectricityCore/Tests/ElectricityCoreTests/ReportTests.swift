@@ -183,4 +183,33 @@ import Testing
         #expect(zh.contains("项目 1"))
         #expect(zh.contains("估算值"))
     }
+
+    @Test func sectionsLeaveOutUnchosenParts() throws {
+        let store = try makeStore()
+        let report = try ReportBuilder.build(store: store, period: .day, containing: utc("2026-10-12T12:00:00Z"), calendar: calendar)
+        let records = try store.events(from: report.interval.start, to: report.interval.end)
+        let toolsOnly = ExportOptions(language: .en, sections: [.byTool])
+
+        let md = ReportExporter.markdown(report, options: toolsOnly, calendar: calendar)
+        #expect(md.contains("## By tool"))
+        #expect(!md.contains("## By model"))
+        #expect(!md.contains("## By project"))
+        #expect(!md.contains("## Method"))
+        #expect(!md.contains("alpha"))
+        #expect(md.contains("METHODOLOGY.md"))
+
+        let json = try ReportExporter.json(report, records: records, options: toolsOnly)
+        let object = try #require(try JSONSerialization.jsonObject(with: json) as? [String: Any])
+        let summary = try #require(object["summary"] as? [String: Any])
+        #expect(summary["by_source"] != nil)
+        #expect(summary["by_model"] == nil)
+        #expect(summary["by_project"] == nil)
+        #expect(!String(decoding: json, as: UTF8.self).contains("/tmp/example"))
+
+        let csv = String(decoding: ReportExporter.csv(records, options: toolsOnly).dropFirst(3), as: UTF8.self)
+        let header = try #require(csv.split(separator: "\r\n").first)
+        #expect(header.hasPrefix("timestamp_utc,source,session_id,model"))
+        #expect(!csv.contains("/tmp/example"))
+        #expect(Set(csv.split(separator: "\r\n").map { $0.split(separator: ",", omittingEmptySubsequences: false).count }).count == 1)
+    }
 }

@@ -88,9 +88,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 let interval = ReportBuilder.interval(period: .week, rolling: rolling, containing: Date())
                 let mixes = await model.energyMixes(for: interval)
                 let report = try ReportBuilder.build(store: store, period: .week, containing: Date(), rolling: rolling, energyMixes: mixes)
+                // `-exportTestSections <raw value>` exports only some parts; all by default.
+                let sections = UserDefaults.standard.string(forKey: "exportTestSections").flatMap(Int.init).map(ReportSections.init) ?? .all
                 for language in [ExportLanguage.chinese, .english] {
                     for format in ExportFormat.allCases {
-                        let data = try ReportExport.data(format, report: report, store: store, strings: language.strings, hideProjects: false)
+                        let data = try ReportExport.data(format, report: report, store: store, strings: language.strings, hideProjects: false,
+                                                     sections: sections)
                         let name = "\(language.rawValue)-" + ReportExport.fileName(format, report: report)
                         try data.write(to: url.appendingPathComponent(name))
                         print("Wrote \(name) (\(data.count) bytes)")

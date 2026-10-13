@@ -15,6 +15,7 @@ final class AutoExportSettings {
         static let format = "autoExport.format"
         static let language = "autoExport.language"
         static let hideProjects = "autoExport.hideProjects"
+        static let sections = "autoExport.sections"
         static let folder = "autoExport.folderBookmark"
         static func lastExported(_ period: ReportPeriod) -> String { "autoExport.last.\(period.rawValue)" }
     }
@@ -28,6 +29,7 @@ final class AutoExportSettings {
     var format: ExportFormat { didSet { defaults.set(format.rawValue, forKey: Key.format) } }
     var language: ExportLanguage { didSet { defaults.set(language.rawValue, forKey: Key.language) } }
     var hideProjects: Bool { didSet { defaults.set(hideProjects, forKey: Key.hideProjects) } }
+    var sections: ReportSections { didSet { defaults.set(sections.rawValue, forKey: Key.sections) } }
     /// The chosen folder, kept as a bookmark so it is found again after it is moved or renamed.
     private(set) var folderBookmark: Data?
 
@@ -38,6 +40,7 @@ final class AutoExportSettings {
         format = defaults.string(forKey: Key.format).flatMap(ExportFormat.init) ?? .pdf
         language = defaults.string(forKey: Key.language).flatMap(ExportLanguage.init) ?? .app
         hideProjects = defaults.bool(forKey: Key.hideProjects)
+        sections = (defaults.object(forKey: Key.sections) as? Int).map(ReportSections.init) ?? .all
         folderBookmark = defaults.data(forKey: Key.folder)
     }
 
@@ -101,7 +104,8 @@ final class AutoExporter {
                 let mixes = await model.energyMixes(for: previous)
                 let report = try ReportBuilder.build(store: store, period: period, containing: previous.start, energyMixes: mixes)
                 let data = try ReportExport.data(settings.format, report: report, store: store,
-                                                 strings: settings.language.strings, hideProjects: settings.hideProjects)
+                                                 strings: settings.language.strings, hideProjects: settings.hideProjects,
+                                                 sections: settings.sections)
                 let accessing = folder.startAccessingSecurityScopedResource()
                 defer { if accessing { folder.stopAccessingSecurityScopedResource() } }
                 try data.write(to: folder.appendingPathComponent(ReportExport.fileName(settings.format, report: report)), options: .atomic)
@@ -138,7 +142,7 @@ struct AutoExportCard: View {
                     Text(verbatim: "简体中文").tag(ExportLanguage.chinese)
                     Text(verbatim: "English").tag(ExportLanguage.english)
                 }
-                Toggle("export.hideProjects", isOn: $settings.hideProjects)
+                ExportContentPicker(format: settings.format, sections: $settings.sections, hideProjects: $settings.hideProjects)
                 LabeledContent("autoExport.folder") {
                     HStack {
                         Text(verbatim: settings.folderURL?.path ?? String(localized: "autoExport.folder.none"))

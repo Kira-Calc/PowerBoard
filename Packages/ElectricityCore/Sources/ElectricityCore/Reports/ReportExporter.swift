@@ -1,14 +1,48 @@
 import Foundation
 
+/// Optional parts of an exported report. The summary is always included.
+/// Not every format has every part: see `available(in:)`.
+public struct ReportSections: OptionSet, Sendable, Hashable {
+    public let rawValue: Int
+    public init(rawValue: Int) { self.rawValue = rawValue }
+
+    /// Energy and token charts (PNG and PDF only).
+    public static let trends = ReportSections(rawValue: 1 << 0)
+    /// Energy mix and energy by grid level.
+    public static let energyMix = ReportSections(rawValue: 1 << 1)
+    public static let byTool = ReportSections(rawValue: 1 << 2)
+    public static let byModel = ReportSections(rawValue: 1 << 3)
+    /// Project breakdown; in CSV and JSON records, the project path field.
+    public static let byProject = ReportSections(rawValue: 1 << 4)
+    /// Grid intensity and factor version notes.
+    public static let method = ReportSections(rawValue: 1 << 5)
+
+    public static let all: ReportSections = [.trends, .energyMix, .byTool, .byModel, .byProject, .method]
+
+    public enum Format: Sendable { case image, markdown, json, csv }
+
+    /// The parts a format can contain. CSV holds raw records, so only the project field can be left out.
+    public static func available(in format: Format) -> ReportSections {
+        switch format {
+        case .image: .all
+        case .markdown: [.energyMix, .byTool, .byModel, .byProject, .method]
+        case .json: [.energyMix, .byTool, .byModel, .byProject]
+        case .csv: [.byProject]
+        }
+    }
+}
+
 /// Options shared by all export formats (SPEC 12, 13).
 public struct ExportOptions: Sendable, Hashable {
     public var language: CLILanguageCode
     /// Replaces project paths with "Project 1", "Project 2" and so on.
     public var hideProjects: Bool
+    public var sections: ReportSections
 
-    public init(language: CLILanguageCode, hideProjects: Bool = false) {
+    public init(language: CLILanguageCode, hideProjects: Bool = false, sections: ReportSections = .all) {
         self.language = language
         self.hideProjects = hideProjects
+        self.sections = sections
     }
 }
 
@@ -26,7 +60,14 @@ public enum ReportExporter {
     /// UTF-8 with a byte order mark, so Excel reads non-ASCII text correctly (SPEC 12).
     public static func csv(_ records: [UsageEventRow], options: ExportOptions) -> Data {
         let names = ProjectNames(hide: options.hideProjects, strings: ReportStrings(options.language))
-        var lines = [csvColumns.joined(separator: ",")]
+        let projects = options.sections.contains(.byProject)
+        let projectColumn = csvColumns.firstIndex(of: "project_path")!
+        func row(_ fields: [String]) -> String {
+            var fields = fields
+            if !projects { fields.remove(at: projectColumn) }
+            return fields.map(csvField).joined(separator: ",")
+        }
+        var lines = [row(csvColumns)]
         let iso = Date.ISO8601FormatStyle()
         for record in records {
             let fields: [String] = [
@@ -36,7 +77,7 @@ public enum ReportExporter {
                 number(record.energyWhLow), number(record.energyWhMid), number(record.energyWhHigh), number(record.co2GMid),
                 number(record.gridGPerKwh), record.gridBasis, record.gridRegion ?? "", record.factorVersion,
             ]
-            lines.append(fields.map(csvField).joined(separator: ","))
+            lines.append(row(fields))
         }
         return Data([0xEF, 0xBB, 0xBF]) + Data((lines.joined(separator: "\r\n") + "\r\n").utf8)
     }
@@ -76,11 +117,12 @@ public enum ReportExporter {
             var energyWh: Estimate
             var co2GMid: Double
             var previousEnergyWhMid: Double
-            var bySource: [ReportBreakdownItem]
-            var byModel: [ReportBreakdownItem]
-            var byProject: [ReportBreakdownItem]
+            // Left out when not chosen.
+            var bySource: [ReportBreakdownItem]?
+            var byModel: [ReportBreakdownItem]?
+            var byProject: [ReportBreakdownItem]?
             var energyMix: Mix?
-            var energyByGridLevel: [String: Double]
+            var energyByGridLevel: [String: Double]?
 
             enum CodingKeys: String, CodingKey {
                 case period, rolling, start, end, events, sessions, tokens
@@ -109,8 +151,11 @@ public enum ReportExporter {
     public static func json(_ report: Report, records: [UsageEventRow], options: ExportOptions) throws -> Data {
         let strings = ReportStrings(options.language)
         let names = ProjectNames(hide: options.hideProjects, strings: strings)
+        let sections = options.sections
         var records = records
-        for index in records.indices { records[index].projectPath = names.name(records[index].projectPath) }
+        for index in records.indices {
+            records[index].projectPath = sections.contains(.byProject) ? names.name(records[index].projectPath) : nil
+        }
         let projects = report.byProject.map { item -> ReportBreakdownItem in
             var item = item
             item.key = names.name(item.key.isEmpty ? nil : item.key) ?? ""
@@ -124,12 +169,15 @@ public enum ReportExporter {
                 events: report.totals.eventCount, sessions: report.sessionCount,
                 tokens: Snapshot.Tokens(report.totals.tokens), energyWh: report.totals.energyWh,
                 co2GMid: report.totals.co2GramsMid, previousEnergyWhMid: report.previousTotals.energyWh.mid,
-                bySource: report.bySource, byModel: report.byModel, byProject: projects,
-                energyMix: report.energyMix.map { mix in
+                bySource: sections.contains(.byTool) ? report.bySource : nil,
+                byModel: sections.contains(.byModel) ? report.byModel : nil,
+                byProject: sections.contains(.byProject) ? projects : nil,
+                energyMix: !sections.contains(.energyMix) ? nil : report.energyMix.map { mix in
                     JSONExport.Mix(cleanShare: mix.cleanShare, basis: mix.basis.rawValue,
                         whByGroup: Dictionary(uniqueKeysWithValues: mix.whByGroup.map { ($0.key.rawValue, $0.value) }))
                 },
-                energyByGridLevel: Dictionary(uniqueKeysWithValues: report.energyByGridLevel.map { ($0.key?.rawValue ?? "none", $0.value) })
+                energyByGridLevel: !sections.contains(.energyMix) ? nil
+                    : Dictionary(uniqueKeysWithValues: report.energyByGridLevel.map { ($0.key?.rawValue ?? "none", $0.value) })
             ),
             records: records
         )
@@ -191,13 +239,20 @@ public enum ReportExporter {
             [ValueFormatting.energy(wh: item.energyWh.mid).text, ValueFormatting.carbon(grams: item.co2GramsMid).text, ValueFormatting.tokens(item.tokens.total)]
         }
         let columns = [t(.energyColumn), t(.carbonColumn), t(.tokensColumn)]
-        table(t(.byTool), [t(.tool)] + columns, report.bySource.map { [t.sourceName($0.source)] + values($0) })
-        table(t(.byModel), [t(.model), t(.tool), t(.confidence)] + columns,
-              report.byModel.map { [$0.key, t.sourceName($0.source), t.confidence($0.tierConfidence)] + values($0) })
-        table(t(.byProject), [t(.project)] + columns,
-              report.byProject.map { [names.name($0.key.isEmpty ? nil : $0.key) ?? t(.unknownProject)] + values($0) })
+        let sections = options.sections
+        if sections.contains(.byTool) {
+            table(t(.byTool), [t(.tool)] + columns, report.bySource.map { [t.sourceName($0.source)] + values($0) })
+        }
+        if sections.contains(.byModel) {
+            table(t(.byModel), [t(.model), t(.tool), t(.confidence)] + columns,
+                  report.byModel.map { [$0.key, t.sourceName($0.source), t.confidence($0.tierConfidence)] + values($0) })
+        }
+        if sections.contains(.byProject) {
+            table(t(.byProject), [t(.project)] + columns,
+                  report.byProject.map { [names.name($0.key.isEmpty ? nil : $0.key) ?? t(.unknownProject)] + values($0) })
+        }
 
-        if let mix = report.energyMix {
+        if sections.contains(.energyMix), let mix = report.energyMix {
             let percent = { (share: Double) in String(format: "%.0f%%", share * 100) }
             lines += ["", "## \(t(.energyMix))", "", "- \(t(.cleanShare))\(sep)\(percent(mix.cleanShare))"]
             for group in FuelGroup.allCases where mix.share(group) >= 0.005 {
@@ -205,7 +260,7 @@ public enum ReportExporter {
             }
             lines += ["", t(mix.basis == .period ? .mixBasisPeriod : .mixBasisRecent)]
         }
-        if report.hasGridLevels {
+        if sections.contains(.energyMix), report.hasGridLevels {
             lines += ["", "## \(t(.byGridLevel))", ""]
             for level in [GridLevel.cleaner, .typical, .lessClean] {
                 lines.append("- \(t(.gridLevel(level)))\(sep)\(ValueFormatting.energy(wh: report.energyByGridLevel[level] ?? 0).text)")
@@ -213,9 +268,11 @@ public enum ReportExporter {
             lines.append("- \(t(.unrecordedLevel))\(sep)\(ValueFormatting.energy(wh: report.energyByGridLevel[nil] ?? 0).text)")
         }
 
-        lines += ["", "## \(t(.method))", ""]
-        lines += report.gridIntensities.map { t(.gridBasis(String(format: "%.0f", $0))) }
-        lines += report.factorVersions.map { t(.factorVersion($0)) }
+        if sections.contains(.method) {
+            lines += ["", "## \(t(.method))", ""]
+            lines += report.gridIntensities.map { t(.gridBasis(String(format: "%.0f", $0))) }
+            lines += report.factorVersions.map { t(.factorVersion($0)) }
+        }
         lines += ["", "---", "", t(.footer)]
         return lines.joined(separator: "\n") + "\n"
     }

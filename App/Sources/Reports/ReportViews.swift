@@ -58,21 +58,24 @@ struct ReportSummaryView: View {
 /// A breakdown table: tool, model or project, with energy, carbon and tokens.
 struct ReportBreakdownTable: View {
     enum Kind { case tool, model, project }
+    /// Narrow tables drop the share bar; the narrowest also drop carbon, which follows energy.
+    enum Columns { case full, noBar, compact }
 
     let kind: Kind
     let items: [ReportBreakdownItem]
     let strings: ReportStrings
     var maxRows = 8
     var hideProjects = false
+    var columns = Columns.full
 
     var body: some View {
         let total = max(items.reduce(0) { $0 + $1.energyWh.mid }, 0.000_001)
         Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
             GridRow {
                 Text(verbatim: header)
-                Text(verbatim: "").gridColumnAlignment(.leading)
+                if columns == .full { Text(verbatim: "").gridColumnAlignment(.leading) }
                 Text(verbatim: strings(.energyColumn)).gridColumnAlignment(.trailing)
-                Text(verbatim: strings(.carbonColumn)).gridColumnAlignment(.trailing)
+                if columns != .compact { Text(verbatim: strings(.carbonColumn)).gridColumnAlignment(.trailing) }
                 Text(verbatim: strings(.tokensColumn)).gridColumnAlignment(.trailing)
             }
             .font(.caption)
@@ -81,17 +84,21 @@ struct ReportBreakdownTable: View {
                 GridRow {
                     HStack(spacing: 6) {
                         Circle().fill(item.source.map(Palette.source) ?? Palette.neutral).frame(width: 7, height: 7)
-                        Text(verbatim: name(item, index: index)).lineLimit(1)
+                        Text(verbatim: name(item, index: index)).lineLimit(1).truncationMode(.middle)
                     }
-                    Capsule()
-                        .fill((item.source.map(Palette.source) ?? Palette.neutral).opacity(0.8))
-                        .frame(width: max(2, 80 * item.energyWh.mid / total), height: 5)
-                        .frame(width: 80, alignment: .leading)
-                    Text(verbatim: ValueFormatting.energy(wh: item.energyWh.mid).text).monospacedDigit()
-                    Text(verbatim: ValueFormatting.carbon(grams: item.co2GramsMid).text).monospacedDigit()
-                    Text(verbatim: ValueFormatting.tokens(item.tokens.total)).monospacedDigit()
+                    if columns == .full {
+                        Capsule()
+                            .fill((item.source.map(Palette.source) ?? Palette.neutral).opacity(0.8))
+                            .frame(width: max(2, 80 * item.energyWh.mid / total), height: 5)
+                            .frame(width: 80, alignment: .leading)
+                    }
+                    Text(verbatim: ValueFormatting.energy(wh: item.energyWh.mid).text).monospacedDigit().fixedSize()
+                    if columns != .compact {
+                        Text(verbatim: ValueFormatting.carbon(grams: item.co2GramsMid).text).monospacedDigit().fixedSize()
+                    }
+                    Text(verbatim: ValueFormatting.tokens(item.tokens.total)).monospacedDigit().fixedSize()
                 }
-                .font(.callout)
+                .font(columns == .full ? .callout : .caption)
             }
         }
     }

@@ -161,6 +161,23 @@ final class ActiveSessionMonitor {
             }
         }
 
+        // Codex logs written in the last 30 minutes, read straight from disk so a new or busy session shows up within
+        // seconds, before its records reach the database. Only the first line (session ID, originator, folder) is read.
+        for recent in Self.recentCodexLogs(now: now) {
+            let running = now.timeIntervalSince(recent.modified) < 15
+            if let index = sessions.firstIndex(where: { $0.sessionID == recent.sessionID }) {
+                if running && sessions[index].status == .done {
+                    sessions[index].status = .running
+                    sessions[index].statusSince = recent.modified
+                }
+                continue
+            }
+            let client = UsageClient.codex(originator: recent.originator)
+            sessions.append(ActiveSession(sessionID: recent.sessionID, source: .codex, projectPath: recent.cwd, title: nil,
+                                          status: running ? .running : .done, statusSince: recent.modified, pid: 0, energyWh: 0,
+                                          client: client, appBundleID: client.flatMap { Self.appBundleID(codexClient: $0) }))
+        }
+
         // Antigravity CLI (`agy`): a running process and the conversation database it has open.
         for pid in ProcessInspector.allPIDs() where ProcessInspector.runs(pid, tool: "agy") {
             for path in ProcessInspector.openFiles(pid) where path.contains("/conversations/") && path.hasSuffix(".db") {
@@ -203,6 +220,43 @@ final class ActiveSessionMonitor {
         case UsageClient.vscode: "com.microsoft.VSCode"
         default: nil
         }
+    }
+
+    struct RecentCodexLog {
+        var sessionID: String
+        var originator: String?
+        var cwd: String?
+        var modified: Date
+    }
+
+    /// Codex logs (`~/.codex/sessions/YYYY/MM/DD/*.jsonl`, today and yesterday) changed in the last 30 minutes.
+    /// Sessions whose originator is the CLI are left to the process check, which knows when they end.
+    nonisolated static func recentCodexLogs(now: Date) -> [RecentCodexLog] {
+        let root = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex/sessions")
+        let calendar = Calendar.current
+        var result: [RecentCodexLog] = []
+        for day in [now, now.addingTimeInterval(-86400)] {
+            let parts = calendar.dateComponents([.year, .month, .day], from: day)
+            let folder = root.appendingPathComponent(String(format: "%04d/%02d/%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0))
+            guard let files = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey]) else { continue }
+            for file in files where file.pathExtension == "jsonl" {
+                guard let modified = try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
+                      now.timeIntervalSince(modified) < 30 * 60,
+                      let handle = try? FileHandle(forReadingFrom: file) else { continue }
+                defer { try? handle.close() }
+                guard let data = try? handle.read(upToCount: 256 * 1024),
+                      let line = data.split(separator: UInt8(ascii: "\n"), maxSplits: 1).first,
+                      let object = try? JSONSerialization.jsonObject(with: Data(line)) as? [String: Any],
+                      object["type"] as? String == "session_meta",
+                      let payload = object["payload"] as? [String: Any],
+                      let sessionID = (payload["id"] as? String) ?? (payload["session_id"] as? String)
+                else { continue }
+                let originator = payload["originator"] as? String
+                guard UsageClient.codex(originator: originator) != UsageClient.cli else { continue }
+                result.append(RecentCodexLog(sessionID: sessionID, originator: originator, cwd: payload["cwd"] as? String, modified: modified))
+            }
+        }
+        return result
     }
 
     /// Modification time of a Claude Code log, `~/.claude/projects/*/<session>.jsonl`.

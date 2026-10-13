@@ -89,7 +89,8 @@ struct DashboardView: View {
     @Bindable var navigation: DashboardNavigation
 
     var body: some View {
-        NavigationSplitView {
+        // The sidebar is always shown: it cannot be collapsed by dragging or by a button.
+        NavigationSplitView(columnVisibility: .constant(.all)) {
             List(selection: $navigation.selection) {
                 ForEach(DashboardSection.Group.allCases, id: \.self) { group in
                     Section(Self.groupTitle(group)) {
@@ -203,11 +204,34 @@ final class DashboardWindowController: NSObject, NSWindowDelegate {
             // New name, so the larger frame saved by earlier versions is not restored.
             window.setFrameAutosaveName("Dashboard.v2")
             if !window.setFrameUsingName("Dashboard.v2") { window.center() }
+            // A saved frame from before the limits existed may be outside them; restoring it ignores the limits.
+            Self.clamp(window)
             self.window = window
         }
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
         window?.makeKeyAndOrderFront(nil)
+    }
+
+    /// Keeps every resize within the limits, whatever starts it.
+    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        let content = sender.contentRect(forFrameRect: NSRect(origin: .zero, size: frameSize)).size
+        let clamped = NSSize(width: min(max(content.width, Self.minimumSize.width), Self.maximumSize.width),
+                             height: min(max(content.height, Self.minimumSize.height), Self.maximumSize.height))
+        return sender.frameRect(forContentRect: NSRect(origin: .zero, size: clamped)).size
+    }
+
+    private static func clamp(_ window: NSWindow) {
+        let content = window.contentRect(forFrameRect: window.frame)
+        let width = min(max(content.width, minimumSize.width), maximumSize.width)
+        let height = min(max(content.height, minimumSize.height), maximumSize.height)
+        guard width != content.width || height != content.height else { return }
+        var frame = window.frameRect(forContentRect: NSRect(x: content.minX, y: content.maxY - height, width: width, height: height))
+        if let screen = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame {
+            frame.origin.x = min(max(frame.minX, screen.minX), screen.maxX - frame.width)
+            frame.origin.y = min(max(frame.minY, screen.minY), screen.maxY - frame.height)
+        }
+        window.setFrame(frame, display: true)
     }
 
     func windowWillClose(_ notification: Notification) {

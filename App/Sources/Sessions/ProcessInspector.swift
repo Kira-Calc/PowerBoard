@@ -134,14 +134,16 @@ enum TerminalJumper {
     /// Brings `app` forward when given (opening it if needed), otherwise the terminal or app running `pid`.
     @MainActor
     static func jump(to pid: pid_t, app bundleID: String?) {
-        if let bundleID, let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first {
+        if let bundleID, let url = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+            .first(where: { $0.activationPolicy == .regular })?.bundleURL
+            ?? NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
             logger.info("Jump to app \(bundleID, privacy: .public)")
-            NSApp.yieldActivation(to: app)
-            app.activate()
-            return
-        }
-        if let bundleID, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
-            NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+            if let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first { NSApp.yieldActivation(to: app) }
+            // Opening the app, like clicking its Dock icon, also brings back a window that was closed or minimized;
+            // activating it alone does not.
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = true
+            NSWorkspace.shared.openApplication(at: url, configuration: configuration)
             return
         }
         guard pid > 0 else { return }

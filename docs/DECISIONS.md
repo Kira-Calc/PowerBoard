@@ -721,3 +721,15 @@ Codex 部分 ccusage 的合计比本应用高约 9%，差值和分叉会话继�
    - 去掉侧边栏折叠按钮；窗口标题从标题栏中移除（macOS 15 及以上用 `.toolbar(removing: .title)`，macOS 14 用空的 `navigationTitle`）。
    - 已验证：把窗口强行设为 300 宽会停在 600；全屏按钮不存在。
 5. **集成页**：按用户要求，去掉所有工具名称旁边的图标（列表行和各工具小节的标题），只保留文字。
+
+### 窗口尺寸限制失效、Codex 桌面版延迟与跳转（用户反馈，2026-10-13）
+
+1. **尺寸限制失效的原因**：上一版加限制之前，窗口曾被拖到 278 宽，这个尺寸被保存在 `Dashboard.v2` 下。`setFrameUsingName` 恢复保存的窗口位置和大小时不检查最小尺寸，所以窗口一打开就比最小值窄，侧边栏也随之折叠。
+   修复分三处：
+   - 恢复保存的尺寸后，主动把它限制在范围内（同时保持窗口在屏幕内）；
+   - `windowWillResize(_:to:)` 在任何调整尺寸的操作中都限制范围；
+   - `NavigationSplitView(columnVisibility: .constant(.all))` 让侧边栏始终显示，不能拖动折叠。
+   已验证：保存的 278 宽恢复后变为 600，侧边栏正常显示。
+2. **跳转到桌面版**：只把 App 调到前台（`NSRunningApplication.activate()`）时，如果它的窗口已经关闭或最小化，不会出现任何窗口。改为 `NSWorkspace.openApplication(at:configuration:)`，效果等同于点击 Dock 图标，会重新打开窗口。
+   已用辅助功能接口模拟点击验证：点 Codex · Desktop 的行，前台变为 `com.openai.codex`；点 Claude Desktop · Code 的行，前台变为 `com.anthropic.claudefordesktop`。
+3. **Codex 桌面版检测有延迟**：原来活跃状态要等日志被读进数据库后才能得到。现在每 2 秒直接查看今天和昨天的 Codex 日志目录：30 分钟内修改过、来源不是 CLI 的日志，读取第一行（会话 ID、来源、工作目录）后加入活跃对话；15 秒内有写入就显示为"运行中"。CLI 会话仍按进程判断，因为进程能准确反映它何时结束。

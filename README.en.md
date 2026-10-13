@@ -20,8 +20,11 @@ PowerBoard shows only the tools you actually use: if you use only Claude Code, C
 | Tool | Local data | Status |
 | --- | --- | --- |
 | Claude Code | `~/.claude/projects/**/*.jsonl` | Supported; matches ccusage within 0.035% |
-| Codex | `~/.codex/sessions/**/*.jsonl` | Supported |
+| Claude Desktop | Cowork: `~/Library/Application Support/Claude/local-agent-mode-sessions/**/.claude/projects/`; Code tab: in `~/.claude/projects`, told apart by the log's entry point | Supported (Cowork and the Code tab). Ordinary chats write no token logs on this Mac |
+| Codex | `~/.codex/sessions/**/*.jsonl` (shared by the CLI and the desktop app) | Supported; labeled CLI, Desktop, VS Code or SDK |
 | Google Antigravity | SQLite under `~/.gemini/antigravity*` | Supported; not yet checked against real data |
+
+Settings > Integrations shows whether each tool was found and how many records it has, with a switch for each.
 
 **More AI coding tools will be supported.** Tell us which one you use in Issues.
 

@@ -18,6 +18,7 @@ Not included: network transfer, model training, embodied emissions of hardware, 
 | --- | --- | --- |
 | Claude Code | `~/.claude/projects/**/*.jsonl` (and `CLAUDE_CONFIG_DIR`) | The `usage` field of each assistant message. Duplicates are removed by message ID plus request ID. |
 | Codex | `~/.codex/sessions/**/*.jsonl` | The increase of `total_token_usage` between `token_count` events in the same file. Repeated totals are ignored. The first event in a file, and the first after a counter reset, use `last_token_usage`, so history copied into a forked session is not counted twice. Reasoning tokens are already part of output. |
+| Claude Desktop | Cowork logs under `~/Library/Application Support/Claude/local-agent-mode-sessions/**/.claude/projects/`, and Code tab records in `~/.claude/projects` whose `entrypoint` is the desktop app | Same format and counting as Claude Code. Ordinary chats in the app write no token logs and are not counted. |
 | Antigravity | SQLite files under `~/.gemini/antigravity*` | Usage records decoded from protobuf metadata. The same response can appear in several tables and is merged by ID. Not yet checked against real data. |
 
 The app reads only the fields it needs for counting (token numbers, model name, time, session ID, project path). It does not store conversation content. Lines it cannot parse are skipped and counted on the Data sources page.
@@ -150,6 +151,7 @@ AI 服务商的数据中心处理本机 Claude Code、Codex 和 Google Antigravi
 | --- | --- | --- |
 | Claude Code | `~/.claude/projects/**/*.jsonl`（以及 `CLAUDE_CONFIG_DIR`） | 每条助手消息的 `usage` 字段，按消息 ID 加请求 ID 去重。 |
 | Codex | `~/.codex/sessions/**/*.jsonl` | 同一文件中相邻 `token_count` 事件之间 `total_token_usage` 的增量，累计值重复的事件忽略。文件中的第一个事件，以及计数器重置后的第一个事件，改用 `last_token_usage`，避免分叉会话复制过来的历史被重复计算。推理 token 已包含在输出中。 |
+| Claude Desktop | Cowork 日志位于 `~/Library/Application Support/Claude/local-agent-mode-sessions/**/.claude/projects/`；Code 标签页的记录写在 `~/.claude/projects`，`entrypoint` 为桌面版 | 格式和计数方式与 Claude Code 相同。桌面版中的普通聊天不在本机写入 token 日志，不统计。 |
 | Antigravity | `~/.gemini/antigravity*` 下的 SQLite 文件 | 从 protobuf 元数据中解码用量记录。同一个响应可能出现在多张表里，按 ID 合并。尚未用真实数据核对。 |
 
 App 只读取计数需要的字段（token 数、模型名、时间、会话 ID、项目路径），不保存对话内容。无法解析的行会跳过，并在"数据源"页显示数量。

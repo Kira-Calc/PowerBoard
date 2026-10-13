@@ -39,6 +39,7 @@ final class IngestCoordinator {
         }
         self.store = store
         model.store = store
+        model.disabledSources = settings.disabledSources
         let locations = settings.logLocations
         let service = IngestService(store: store, calculator: calculator, locations: locations)
         self.service = service
@@ -184,7 +185,7 @@ final class IngestCoordinator {
     private func startWatcher(locations: LogLocations) {
         watcher?.stop()
         let continuation = triggers
-        let watcher = LogWatcher(paths: (locations.claudeCode + locations.codex + locations.antigravity).map(\.path), latency: 0.3) {
+        let watcher = LogWatcher(paths: (locations.claudeCode + locations.claudeDesktop + locations.codex + locations.antigravity).map(\.path), latency: 0.3) {
             continuation?.yield()
         }
         watcher.start()
@@ -213,6 +214,7 @@ final class IngestCoordinator {
 
     /// Applies added or removed custom paths and scans them.
     func applySourcePaths() {
+        model.disabledSources = settings.disabledSources
         guard let service else { return }
         let locations = settings.logLocations
         Task {

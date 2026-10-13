@@ -63,6 +63,8 @@ struct CleanlinessPage: View {
                             String(format: "%.0f%%", share * 100), end.formatted(date: .abbreviated, time: .shortened)))
                     .font(.callout)
             }
+            // One line per location; a narrow window scrolls the table sideways instead of breaking names.
+            ScrollView(.horizontal) {
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
                 GridRow {
                     Text("grid.column.location")
@@ -79,7 +81,7 @@ struct CleanlinessPage: View {
                     let level = status.candidateLevels[candidate.id]
                     GridRow {
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(verbatim: GridText.candidateName(candidate))
+                            Text(verbatim: GridText.candidateName(candidate)).lineLimit(1)
                             if let region = reading?.region {
                                 Text(verbatim: region).font(.caption.monospaced()).foregroundStyle(.secondary)
                             }
@@ -106,6 +108,8 @@ struct CleanlinessPage: View {
                     }
                     .font(.callout)
                 }
+            }
+            .fixedSize(horizontal: true, vertical: false)
             }
         }
     }

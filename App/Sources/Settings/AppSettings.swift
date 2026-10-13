@@ -114,6 +114,7 @@ final class AppSettings {
         static let dayWindow = "general.dayWindow"
         static let disabledEquivalents = "equivalents.disabled"
         static func customPaths(_ source: UsageSource) -> String { "sources.customPaths.\(source.rawValue)" }
+        static let disabledSources = "sources.disabled"
         static let retention = "data.retention"
         static let dailyEnabled = "notifications.daily.enabled"
         static let dailyMinutes = "notifications.daily.minutes"
@@ -214,6 +215,12 @@ final class AppSettings {
     // MARK: Data sources
 
     private(set) var customPaths: [UsageSource: [String]]
+    /// Tools the user turned off on the integrations page: not read and not shown. Their records are kept.
+    var disabledSources: Set<UsageSource> = [] {
+        didSet { defaults.set(disabledSources.map(\.rawValue).sorted(), forKey: Key.disabledSources) }
+    }
+
+    func isEnabled(_ source: UsageSource) -> Bool { !disabledSources.contains(source) }
 
     var retention: DataRetention {
         didSet { defaults.set(retention.rawValue, forKey: Key.retention) }
@@ -291,6 +298,7 @@ final class AppSettings {
             paths[source] = defaults.stringArray(forKey: Key.customPaths(source)) ?? []
         }
         customPaths = paths
+        disabledSources = Set((defaults.stringArray(forKey: Key.disabledSources) ?? []).compactMap(UsageSource.init))
         retention = defaults.string(forKey: Key.retention).flatMap(DataRetention.init) ?? .forever
 
         dailyReportEnabled = defaults.bool(forKey: Key.dailyEnabled)
@@ -387,11 +395,28 @@ final class AppSettings {
     }
 
     var logLocations: LogLocations {
+        var locations = LogLocations.standard(
+            extraClaudeCode: customPaths(for: .claudeCode).map { URL(fileURLWithPath: $0) },
+            extraCodex: customPaths(for: .codex).map { URL(fileURLWithPath: $0) },
+            extraAntigravity: customPaths(for: .antigravity).map { URL(fileURLWithPath: $0) },
+            extraClaudeDesktop: customPaths(for: .claudeDesktop).map { URL(fileURLWithPath: $0) }
+        )
+        // Turned-off tools are not read.
+        if !isEnabled(.claudeCode) { locations.claudeCode = [] }
+        if !isEnabled(.claudeDesktop) { locations.claudeDesktop = [] }
+        if !isEnabled(.codex) { locations.codex = [] }
+        if !isEnabled(.antigravity) { locations.antigravity = [] }
+        return locations
+    }
+
+    /// All configured folders of a tool, whether or not it is turned on, for the integrations page.
+    func configuredRoots(for source: UsageSource) -> [URL] {
         LogLocations.standard(
             extraClaudeCode: customPaths(for: .claudeCode).map { URL(fileURLWithPath: $0) },
             extraCodex: customPaths(for: .codex).map { URL(fileURLWithPath: $0) },
-            extraAntigravity: customPaths(for: .antigravity).map { URL(fileURLWithPath: $0) }
-        )
+            extraAntigravity: customPaths(for: .antigravity).map { URL(fileURLWithPath: $0) },
+            extraClaudeDesktop: customPaths(for: .claudeDesktop).map { URL(fileURLWithPath: $0) }
+        ).roots(for: source)
     }
 }
 

@@ -57,60 +57,65 @@ struct ReportsPage: View {
         if let result { withAnimation(.smooth(duration: 0.3)) { report = result } }
     }
 
+    /// Two rows, so the period fits in a narrow window: what to show and export, then which period.
     private var controls: some View {
-        HStack(spacing: 12) {
-            Picker("", selection: $period) {
-                Text("reports.period.day").tag(ReportPeriod.day)
-                Text("reports.period.week").tag(ReportPeriod.week)
-                Text("reports.period.month").tag(ReportPeriod.month)
-                Text("reports.period.year").tag(ReportPeriod.year)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Picker("", selection: $period) {
+                    Text("reports.period.day").tag(ReportPeriod.day)
+                    Text("reports.period.week").tag(ReportPeriod.week)
+                    Text("reports.period.month").tag(ReportPeriod.month)
+                    Text("reports.period.year").tag(ReportPeriod.year)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                Picker("", selection: $rolling) {
+                    Text("reports.mode.calendar").tag(false)
+                    Text("reports.mode.rolling").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                .help(Text("reports.mode.help"))
+                Spacer(minLength: 0)
+                Button {
+                    showExport = true
+                } label: {
+                    Label { Text("reports.export") } icon: { SymbolIcon(Icons.export, size: 14) }
+                }
+                .disabled(report == nil)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-
-            Picker("", selection: $rolling) {
-                Text("reports.mode.calendar").tag(false)
-                Text("reports.mode.rolling").tag(true)
+            HStack(spacing: 8) {
+                if rolling {
+                    Text(verbatim: report.map { strings.periodLabel($0) } ?? "")
+                        .font(.headline)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                } else {
+                    Button { shift(-1) } label: { SymbolIcon(Icons.previous, size: 13) }
+                        .buttonStyle(.borderless)
+                        .help(Text("reports.previous"))
+                        .accessibilityLabel(Text("reports.previous"))
+                    Text(verbatim: strings.periodLabel(period, interval))
+                        .font(.headline)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                    Button { shift(1) } label: { SymbolIcon(Icons.next, size: 13) }
+                        .buttonStyle(.borderless)
+                        .disabled(isCurrent)
+                        .help(Text("reports.next"))
+                        .accessibilityLabel(Text("reports.next"))
+                    if !isCurrent {
+                        Button("reports.current") { anchor = Date() }
+                    }
+                }
+                Spacer(minLength: 0)
+                if period == .year && !rolling {
+                    Button("reports.yearSummary") { showYear = true }
+                }
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-            .help(Text("reports.mode.help"))
-
-            if rolling {
-                Text(verbatim: report.map { strings.periodLabel($0) } ?? "")
-                    .font(.headline)
-                    .monospacedDigit()
-            } else {
-            HStack(spacing: 4) {
-                Button { shift(-1) } label: { SymbolIcon(Icons.previous, size: 13) }
-                    .help(Text("reports.previous"))
-                    .accessibilityLabel(Text("reports.previous"))
-                Text(verbatim: strings.periodLabel(period, interval))
-                    .font(.headline)
-                    .monospacedDigit()
-                    .frame(minWidth: 180)
-                Button { shift(1) } label: { SymbolIcon(Icons.next, size: 13) }
-                    .disabled(isCurrent)
-                    .help(Text("reports.next"))
-                    .accessibilityLabel(Text("reports.next"))
-            }
-            .buttonStyle(.borderless)
-            if !isCurrent {
-                Button("reports.current") { anchor = Date() }
-            }
-            }
-            Spacer()
-            if period == .year && !rolling {
-                Button("reports.yearSummary") { showYear = true }
-            }
-            Button {
-                showExport = true
-            } label: {
-                Label { Text("reports.export") } icon: { SymbolIcon(Icons.export, size: 14) }
-            }
-            .disabled(report == nil)
         }
     }
 
@@ -133,18 +138,19 @@ struct ReportsPage: View {
         }
         Card {
             CardHeader(icon: Icons.calendarBlank, color: Palette.energy, title: "reports.trend")
-            Grid(horizontalSpacing: 20, verticalSpacing: 16) {
-                GridRow {
+            // Two charts per row when there is room, one per row in a narrow window.
+            VStack(spacing: 16) {
+                ResponsiveRow(minItemWidth: 260, spacing: 20) {
                     chart(strings(.energyChart), report, .energy, cumulative: false)
                     chart(strings(.energyCumulative), report, .energy, cumulative: true)
                 }
-                GridRow {
+                ResponsiveRow(minItemWidth: 260, spacing: 20) {
                     chart(strings(.tokenChart), report, .tokens, cumulative: false)
                     chart(strings(.tokenCumulative), report, .tokens, cumulative: true)
                 }
             }
         }
-        HStack(alignment: .top, spacing: 16) {
+        ResponsiveRow(minItemWidth: 250) {
             Card(fillHeight: true) {
                 CardHeader(icon: Icons.pieChart, color: Palette.clean, title: "reports.energyMix")
                 if let mix = report.energyMix {
@@ -158,7 +164,6 @@ struct ReportsPage: View {
                     CardHeader(icon: Icons.leaf, color: Palette.clean, title: "reports.byGridLevel")
                     ReportGridLevelView(report: report, strings: strings)
                 }
-                .frame(width: 280)
             }
         }
         .fixedSize(horizontal: false, vertical: true)

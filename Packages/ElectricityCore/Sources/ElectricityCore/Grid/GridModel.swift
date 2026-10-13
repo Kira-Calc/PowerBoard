@@ -9,7 +9,7 @@ public enum GridProvider: String, Sendable, Hashable, CaseIterable, Codable {
 
     public init(source: UsageSource) {
         switch source {
-        case .claudeCode: self = .anthropic
+        case .claudeCode, .claudeDesktop: self = .anthropic
         case .codex: self = .openai
         case .antigravity: self = .google
         }

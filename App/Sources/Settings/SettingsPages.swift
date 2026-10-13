@@ -105,15 +105,26 @@ struct SourcesSettingsPage: View {
     let context: DashboardContext
     @State private var confirmClear = false
     @State private var showUnused = false
+    @State private var clientCounts: [UsageSource: [String: Int]] = [:]
 
     var body: some View {
         @Bindable var settings = context.settings
         Form {
+            // Every supported tool, with what was found and a switch, as in other agent tools' integration pages.
+            Section {
+                ForEach(UsageSource.allCases, id: \.self) { source in
+                    integrationRow(source)
+                }
+            } header: {
+                Text("sources.integrations")
+            } footer: {
+                Text("sources.integrations.footer").font(.caption).foregroundStyle(.secondary)
+            }
             ForEach(context.model.usedSources, id: \.self) { source in
                 sourceSection(source)
             }
             // Tools without records stay reachable here, so a log folder in a custom place can still be added.
-            let unused = UsageSource.allCases.filter { !context.model.usedSources.contains($0) }
+            let unused = UsageSource.allCases.filter { !context.model.usedSources.contains($0) && settings.isEnabled($0) }
             if !unused.isEmpty {
                 Section {
                     Toggle("sources.otherTools", isOn: $showUnused)
@@ -149,12 +160,55 @@ struct SourcesSettingsPage: View {
             }
         }
         .formStyle(.grouped)
+        .storeQuery(context.model, id: AnyHashable(context.model.dataVersion)) { store in
+            try store.clientCounts()
+        } assign: { clientCounts = $0 }
         .confirmationDialog("sources.clear.confirm.title", isPresented: $confirmClear) {
             Button("sources.clear", role: .destructive) {
                 Task { await context.coordinator.clearAllData() }
             }
         } message: {
             Text("sources.clear.confirm.message")
+        }
+    }
+
+    /// Name, the clients seen in its records ("CLI · Desktop"), whether its logs were found, and an on/off switch.
+    private func integrationRow(_ source: UsageSource) -> some View {
+        let settings = context.settings
+        let found = settings.configuredRoots(for: source).contains { FileManager.default.fileExists(atPath: $0.path) }
+        let clients = (clientCounts[source] ?? [:]).filter { !$0.key.isEmpty && $0.value > 0 }
+            .sorted { $0.value > $1.value }.map(\.key)
+        let records = (clientCounts[source] ?? [:]).values.reduce(0, +)
+        return HStack(spacing: 10) {
+            IconBadge(Icons.terminalWindow, color: Palette.source(source), size: 22)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(verbatim: SourceText.name(source))
+                if !clients.isEmpty {
+                    Text(verbatim: clients.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 8)
+            if found || records > 0 {
+                HStack(spacing: 4) {
+                    SymbolIcon(Icons.checkmarkSeal, size: 13).foregroundStyle(Palette.clean)
+                    Text(String(format: String(localized: "sources.integration.found"), records.formatted()))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+                .font(.callout)
+            } else {
+                Text("sources.integration.notFound").font(.callout).foregroundStyle(.secondary)
+            }
+            Toggle("", isOn: Binding(
+                get: { settings.isEnabled(source) },
+                set: { on in
+                    if on { settings.disabledSources.remove(source) } else { settings.disabledSources.insert(source) }
+                    context.coordinator.applySourcePaths()
+                }
+            ))
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .accessibilityLabel(Text(verbatim: SourceText.name(source)))
         }
     }
 
@@ -227,6 +281,7 @@ struct SourcesSettingsPage: View {
     private static func notFoundKey(_ source: UsageSource) -> LocalizedStringKey {
         switch source {
         case .claudeCode: "sources.notFound.claudeCode"
+        case .claudeDesktop: "sources.notFound.claudeDesktop"
         case .codex: "sources.notFound.codex"
         case .antigravity: "sources.notFound.antigravity"
         }

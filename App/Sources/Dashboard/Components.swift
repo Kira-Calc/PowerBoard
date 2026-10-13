@@ -10,7 +10,10 @@ struct PageContainer<Content: View>: View {
             VStack(alignment: .leading, spacing: 20) {
                 content
             }
-            .padding(24)
+            .padding(.horizontal, 24)
+            // The page title sits in the title bar above, so content starts close under it.
+            .padding(.top, 8)
+            .padding(.bottom, 24)
             .frame(maxWidth: 900, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -272,5 +275,83 @@ extension View {
         assign: @escaping (Value) -> Void
     ) -> some View {
         modifier(StoreQuery(model: model, extraID: id, query: query, assign: assign))
+    }
+}
+
+/// Children side by side when each gets at least `minItemWidth`, otherwise stacked. Side by side, every child is
+/// given the height of the tallest, so cards end on the same line.
+struct ResponsiveRow: Layout {
+    var minItemWidth: CGFloat
+    var spacing: CGFloat = 16
+
+    private func horizontal(_ width: CGFloat?, count: Int) -> Bool {
+        guard let width, count > 1 else { return count <= 1 }
+        return width >= minItemWidth * CGFloat(count) + spacing * CGFloat(count - 1)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? minItemWidth * CGFloat(subviews.count)
+        if horizontal(proposal.width, count: subviews.count) {
+            let itemWidth = (width - spacing * CGFloat(subviews.count - 1)) / CGFloat(max(subviews.count, 1))
+            let height = subviews.map { $0.sizeThatFits(ProposedViewSize(width: itemWidth, height: nil)).height }.max() ?? 0
+            return CGSize(width: width, height: height)
+        }
+        let heights = subviews.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height }
+        return CGSize(width: width, height: heights.reduce(0, +) + spacing * CGFloat(max(subviews.count - 1, 0)))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        if horizontal(bounds.width, count: subviews.count) {
+            let itemWidth = (bounds.width - spacing * CGFloat(subviews.count - 1)) / CGFloat(max(subviews.count, 1))
+            for (index, subview) in subviews.enumerated() {
+                let x = bounds.minX + CGFloat(index) * (itemWidth + spacing)
+                subview.place(at: CGPoint(x: x, y: bounds.minY), proposal: ProposedViewSize(width: itemWidth, height: bounds.height))
+            }
+        } else {
+            var y = bounds.minY
+            for subview in subviews {
+                let height = subview.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil)).height
+                subview.place(at: CGPoint(x: bounds.minX, y: y), proposal: ProposedViewSize(width: bounds.width, height: height))
+                y += height + spacing
+            }
+        }
+    }
+}
+
+/// Items in a line that wraps onto the next when it runs out of width, like words in a sentence.
+struct FlowRow: Layout {
+    var spacing: CGFloat = 18
+    var lineSpacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, lineHeight: CGFloat = 0, widest: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0 && x + size.width > maxWidth {
+                y += lineHeight + lineSpacing
+                x = 0
+                lineHeight = 0
+            }
+            x += size.width + spacing
+            widest = max(widest, x - spacing)
+            lineHeight = max(lineHeight, size.height)
+        }
+        return CGSize(width: proposal.width ?? widest, height: y + lineHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX, y = bounds.minY, lineHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > bounds.minX && x + size.width > bounds.maxX {
+                y += lineHeight + lineSpacing
+                x = bounds.minX
+                lineHeight = 0
+            }
+            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+        }
     }
 }

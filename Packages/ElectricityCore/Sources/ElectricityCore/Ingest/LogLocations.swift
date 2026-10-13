@@ -3,12 +3,15 @@ import Foundation
 /// Directories that hold AI tool logs (SPEC 4.1, 4.2).
 public struct LogLocations: Sendable, Hashable {
     public var claudeCode: [URL]
+    /// Claude desktop app folders. Cowork keeps a Claude Code style `.claude/projects` inside each session folder.
+    public var claudeDesktop: [URL]
     public var codex: [URL]
     /// Antigravity conversation directories (SQLite databases, not JSONL).
     public var antigravity: [URL]
 
-    public init(claudeCode: [URL], codex: [URL], antigravity: [URL] = []) {
+    public init(claudeCode: [URL], codex: [URL], antigravity: [URL] = [], claudeDesktop: [URL] = []) {
         self.claudeCode = claudeCode
+        self.claudeDesktop = claudeDesktop
         self.codex = codex
         self.antigravity = antigravity
     }
@@ -25,7 +28,8 @@ public struct LogLocations: Sendable, Hashable {
         home: URL = FileManager.default.homeDirectoryForCurrentUser,
         extraClaudeCode: [URL] = [],
         extraCodex: [URL] = [],
-        extraAntigravity: [URL] = []
+        extraAntigravity: [URL] = [],
+        extraClaudeDesktop: [URL] = []
     ) -> LogLocations {
         var claude: [URL] = []
         if let configDirs = environment["CLAUDE_CONFIG_DIR"] {
@@ -59,16 +63,20 @@ public struct LogLocations: Sendable, Hashable {
             return FileManager.default.fileExists(atPath: nested.path, isDirectory: &isDirectory) && isDirectory.boolValue ? nested : root
         }
 
+        let desktop = [home.appendingPathComponent("Library/Application Support/Claude/local-agent-mode-sessions")]
+
         return LogLocations(
             claudeCode: unique(claude + extraClaudeCode),
             codex: unique(codex + extraCodex),
-            antigravity: unique(antigravity)
+            antigravity: unique(antigravity),
+            claudeDesktop: unique(desktop + extraClaudeDesktop)
         )
     }
 
     public func roots(for source: UsageSource) -> [URL] {
         switch source {
         case .claudeCode: claudeCode
+        case .claudeDesktop: claudeDesktop
         case .codex: codex
         case .antigravity: antigravity
         }
@@ -79,15 +87,19 @@ public struct LogLocations: Sendable, Hashable {
     /// Files reachable through more than one root are listed once.
     public func logFiles(for source: UsageSource) -> [String] {
         let fileExtension = source == .antigravity ? "db" : "jsonl"
+        // Claude Desktop logs sit in hidden `.claude/projects` folders, so hidden folders are entered there and
+        // only files under such a folder are taken (other JSONL files, such as audit logs, are not usage).
+        let desktop = source == .claudeDesktop
         var seen = Set<String>()
         var files: [String] = []
         for root in roots(for: source) {
             guard let enumerator = FileManager.default.enumerator(
                 at: root,
                 includingPropertiesForKeys: [.isRegularFileKey],
-                options: [.skipsHiddenFiles]
+                options: desktop ? [] : [.skipsHiddenFiles]
             ) else { continue }
             for case let url as URL in enumerator where url.pathExtension == fileExtension {
+                if desktop && !url.path.contains("/.claude/projects/") { continue }
                 guard (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true else { continue }
                 let path = url.resolvingSymlinksInPath().path
                 if seen.insert(path).inserted { files.append(path) }

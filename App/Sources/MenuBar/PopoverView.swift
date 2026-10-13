@@ -315,10 +315,17 @@ enum SourceText {
     static func name(_ source: UsageSource) -> String {
         switch source {
         case .claudeCode: String(localized: "source.claudeCode")
+        case .claudeDesktop: String(localized: "source.claudeDesktop")
         case .codex: String(localized: "source.codex")
         case .antigravity: String(localized: "source.antigravity")
         }
     }
+    /// "Codex · Desktop": the tool and, when known, the client that wrote the records.
+    static func name(_ source: UsageSource, client: String?) -> String {
+        guard let client, !client.isEmpty else { return name(source) }
+        return "\(name(source)) · \(client)"
+    }
+
 }
 
 /// Localized text for everyday comparisons (SPEC 9.6).

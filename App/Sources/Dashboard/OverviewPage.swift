@@ -16,11 +16,11 @@ struct OverviewPage: View {
         PageContainer {
             if let today = context.model.snapshot?.today, today.energyWh.mid > 0 {
                 // Equal-height cards: the row takes the height of its tallest card.
-                HStack(alignment: .top, spacing: 16) {
+                // Side by side with equal heights when there is room, stacked in a narrow window.
+                ResponsiveRow(minItemWidth: 250) {
                     energyCard(today, settings: settings)
                     carbonCard(today)
                 }
-                .fixedSize(horizontal: false, vertical: true)
                 Card {
                     CardHeader(icon: Icons.terminalWindow, color: .blue, title: "sessions.title")
                     if context.model.activeSessions.isEmpty {
@@ -61,12 +61,15 @@ struct OverviewPage: View {
             RollingText(text)
                 .font(.system(size: 36, weight: .semibold))
         }
+        // One line; the number gets smaller instead of wrapping in a narrow window.
+        .lineLimit(1)
+        .minimumScaleFactor(0.5)
     }
 
     private func energyCard(_ today: Snapshot.Today, settings: AppSettings) -> some View {
         let energy = settings.displayedEnergy(today)
         let range = settings.formatEnergy(energy.total)
-        return Card {
+        return Card(fillHeight: true) {
             CardHeader(icon: Icons.lightning, color: Palette.energy,
                        title: LocalizedStringKey(context.settings.dayKey(energy.includesLocal ? "popover.today.energyWithLocal" : "popover.today.energy")),
                        info: .energy, context: context, serverTag: !energy.includesLocal)
@@ -82,7 +85,7 @@ struct OverviewPage: View {
     }
 
     private func carbonCard(_ today: Snapshot.Today) -> some View {
-        Card {
+        Card(fillHeight: true) {
             CardHeader(icon: Icons.cloud, color: Palette.carbon, title: "popover.carbon", info: .carbon, context: context)
             bigValue("\(ValueFormatting.carbon(grams: today.co2G).text) \(Units.co2e)")
             Text(String(format: String(localized: "overview.carbon.basis"), Formatting.number(context.settings.gridGramsPerKWh, decimals: 0), Units.gramsPerKWh))
@@ -96,11 +99,23 @@ struct OverviewPage: View {
     private func tokenCard(_ tokens: Snapshot.Tokens) -> some View {
         Card {
             CardHeader(icon: Icons.coins, color: Palette.tokens, title: "popover.tokens", info: .tokens, context: context)
-            HStack(alignment: .top, spacing: 0) {
-                tokenValue("popover.tokens.input", tokens.input)
-                tokenValue("popover.tokens.output", tokens.output)
-                tokenValue("popover.tokens.cacheWrite", tokens.cacheWrite)
-                tokenValue("popover.tokens.cacheRead", tokens.cacheRead)
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 12) {
+                    tokenValue("popover.tokens.input", tokens.input)
+                    tokenValue("popover.tokens.output", tokens.output)
+                    tokenValue("popover.tokens.cacheWrite", tokens.cacheWrite)
+                    tokenValue("popover.tokens.cacheRead", tokens.cacheRead)
+                }
+                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
+                    GridRow {
+                        tokenValue("popover.tokens.input", tokens.input)
+                        tokenValue("popover.tokens.output", tokens.output)
+                    }
+                    GridRow {
+                        tokenValue("popover.tokens.cacheWrite", tokens.cacheWrite)
+                        tokenValue("popover.tokens.cacheRead", tokens.cacheRead)
+                    }
+                }
             }
         }
     }
@@ -110,8 +125,9 @@ struct OverviewPage: View {
             Text(title).font(.caption).foregroundStyle(.secondary)
             RollingText(ValueFormatting.tokens(value))
                 .font(.title2.weight(.semibold))
+                .fixedSize()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(minWidth: 70, maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
     }
 
@@ -128,11 +144,9 @@ struct OverviewPage: View {
     private func equivalentCard(_ matches: [EquivalentMatch]) -> some View {
         if !matches.isEmpty {
             Card {
-                HStack(alignment: .top, spacing: 0) {
+                // Three columns, or one item per line in a narrow window.
+                ResponsiveRow(minItemWidth: 150, spacing: 16) {
                     ForEach(Array(matches.enumerated()), id: \.element.item.id) { index, match in
-                        if index > 0 {
-                            Divider().padding(.horizontal, 16)
-                        }
                         VStack(alignment: .leading, spacing: 4) {
                             Text(EquivalentText.kind(match.item))
                                 .font(.caption)

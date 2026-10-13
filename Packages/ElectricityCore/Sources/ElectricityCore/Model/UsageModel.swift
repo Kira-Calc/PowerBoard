@@ -27,8 +27,51 @@ public struct Estimate: Sendable, Hashable, Codable {
 /// The AI tool that produced a usage record.
 public enum UsageSource: String, Sendable, Codable, CaseIterable {
     case claudeCode = "claude_code"
+    /// Claude desktop app: Cowork (local agent mode) and, when it writes its own logs, the Code tab.
+    case claudeDesktop = "claude_desktop"
     case codex = "codex"
     case antigravity = "antigravity"
+}
+
+/// Which client of a tool wrote a record, from the log's own metadata. Shown as a plain label, the same in every
+/// language: "CLI", "Desktop", "VS Code", "SDK", and for the Claude desktop app "Code" (its Code tab) and "Cowork".
+public enum UsageClient {
+    public static let cli = "CLI"
+    public static let desktop = "Desktop"
+    public static let vscode = "VS Code"
+    public static let sdk = "SDK"
+    public static let cowork = "Cowork"
+    /// The Code tab of the Claude desktop app.
+    public static let desktopCode = "Code"
+
+    /// Claude Code `entrypoint`: "cli", "sdk-ts", "claude-vscode", "local-agent" (Cowork), "claude-desktop" (Code tab), …
+    public static func claude(entrypoint: String?) -> String? {
+        guard let value = entrypoint?.lowercased(), !value.isEmpty else { return nil }
+        if value == "local-agent" { return cowork }
+        if value.contains("desktop") { return desktopCode }
+        if value.contains("vscode") || value.contains("ide") { return vscode }
+        if value.hasPrefix("sdk") { return sdk }
+        if value == "cli" { return cli }
+        return nil
+    }
+
+    /// Codex `session_meta.originator`: "codex_cli_rs", "codex_exec", "Codex Desktop", "codex_work_desktop",
+    /// "codex_vscode", "codex_sdk_ts", …
+    public static func codex(originator: String?) -> String? {
+        guard let value = originator?.lowercased(), !value.isEmpty else { return nil }
+        if value.contains("desktop") { return desktop }
+        if value.contains("vscode") { return vscode }
+        if value.contains("sdk") { return sdk }
+        return cli
+    }
+
+    /// Claude records from the desktop app belong to the Claude Desktop source, wherever their file is.
+    public static func claudeSource(entrypoint: String?, default fallback: UsageSource) -> UsageSource {
+        switch claude(entrypoint: entrypoint) {
+        case cowork, desktopCode: .claudeDesktop
+        default: fallback
+        }
+    }
 }
 
 /// Token counts for one record, normalized so that each token is counted once.
@@ -78,8 +121,12 @@ public struct ParsedUsage: Sendable, Hashable {
     public var model: String
     public var timestamp: Date
     public var tokens: TokenCounts
+    /// Client that wrote the record (`UsageClient`), when the log says.
+    public var client: String?
 
-    public init(dedupeKey: String, source: UsageSource, sessionID: String, projectPath: String?, model: String, timestamp: Date, tokens: TokenCounts) {
+    public init(dedupeKey: String, source: UsageSource, sessionID: String, projectPath: String?, model: String, timestamp: Date, tokens: TokenCounts,
+                client: String? = nil) {
+        self.client = client
         self.dedupeKey = dedupeKey
         self.source = source
         self.sessionID = sessionID

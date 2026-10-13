@@ -669,3 +669,34 @@ Codex 部分 ccusage 的合计比本应用高约 9%，差值和分叉会话继�
 
 - **原因**：柱子原来按日历单位分格（`BarMark(x:unit:)`），每根柱子都画满一整个小时或一整天。在"截至此刻"模式下，首尾两段不满一格（例如 00:00 到 00:08），最后几根柱子就超出了图表右边界，压住了纵轴数字。
 - **修复**：每根柱子改为 `RectangleMark`，横向占满自己那一段（两侧各收窄 12%，作为柱间间隔），纵向的起止高度自己计算，按工具堆叠。用 `BarMark` 给定时间跨度后，Swift Charts 不会再自动堆叠，所以不能用它。时间刻度文字改为居中显示在网格线下方，并且不显示紧贴首尾的刻度。
+
+### 桌面版数据、集成页、窗口样式（用户要求，2026-10-13）
+
+1. **桌面版数据**（只查看了目录结构、字段名，以及 `entrypoint`、`originator` 这类元数据，没有读对话内容）：
+   - **Claude Desktop 作为新的数据源**（`UsageSource.claudeDesktop`，按 Anthropic 计算电网等级）。
+     - Cowork 的日志位于 `local-agent-mode-sessions/**/.claude/projects/`，`entrypoint` 为 `local-agent`。这个目录是隐藏目录，所以 Claude Desktop 扫描时会进入隐藏目录，但只读取 `/.claude/projects/` 下的 JSONL，避免读到 `audit.jsonl` 这类非用量文件。
+     - Code 标签页的日志写在 `~/.claude/projects`，`entrypoint` 为 `claude-desktop`（已在一个真实会话上确认）。解析时按 `entrypoint` 归入 Claude Desktop。
+     - 普通聊天在本机没有 token 记录，不统计。
+   - **客户端标注**：迁移 `v5-client` 新增 `usage_event.client` 列。
+     - Codex 根据 `session_meta.originator` 标注为 CLI、Desktop、VS Code 或 SDK（按用户要求，命令行写 CLI，桌面版写 Desktop）。Codex 桌面版本来就写在 `~/.codex/sessions`，所以一直都在统计，这次只是加上标注。
+     - Claude Code 标注为 CLI、SDK 或 VS Code；Claude Desktop 标注为 Code 或 Cowork。
+   - **已有记录补标注**：Codex 读取每个文件的第一行，Claude 读取日志中的 `entrypoint` 字段，只在仍有未标注的记录时运行。已读成 Claude Code、但客户端是 Code 或 Cowork 的记录，改归 Claude Desktop。
+   - 本机结果：Claude Desktop 的 Code 标签页 4 条、Cowork 17 条；Codex 的 Desktop 540 条、VS Code 547 条。
+2. **集成页**（原"数据源"，参考 Vibe Island 的"集成"页）：
+   - 顶部列出所有支持的工具，每行显示名称、检测到的客户端、记录条数（或"未找到"）和开关。
+   - 关闭某个工具后，不再读取它的日志，各页面也不再显示它（`disabledSources`）。已有记录保留，重新打开后恢复显示。
+   - 下方仍是每个工具的读取状态、路径和自定义文件夹。
+3. **窗口样式**（参考 Vibe Island）：
+   - 侧边栏从窗口顶部开始，窗口按钮在侧边栏里；页面标题（图标加标题）放在标题栏中，与窗口按钮对齐。
+   - 实现方式：`fullSizeContentView`、透明标题栏、隐藏窗口标题，SwiftUI 的工具栏通过 `sceneBridgingOptions = [.toolbars]` 接入窗口，标题作为 `.navigation` 位置的工具栏项。在 macOS 26 上隐藏它的共享背景，旧系统保持默认外观。
+   - 试过但无效的做法：隐藏工具栏、`ignoresSafeArea`、给窗口挂空的 `NSToolbar`。macOS 26 会把内容区放在标题栏条带下方，也会隐藏放进这个条带的内容，所以标题必须作为工具栏项。
+   - 默认窗口大小 700 × 740，最小 600 × 520，用新的自动保存名，避免恢复旧版本保存的大窗口。
+4. **窄窗口适配**：
+   - 新增两个布局：`ResponsiveRow`（宽度够时并排且等高，不够时上下排列）和 `FlowRow`（自动换行）。
+   - 实时概览：电量和碳排卡片使用 `ResponsiveRow`，大数字单行显示、宽度不够时自动缩小；token 卡片放不下时变成 2 × 2；日常换算放不下时每项一行。
+   - 报告：控件分为两行（周期和模式、导出 / 时间范围）；四张图表每行两张或一张；能源结构与电网等级卡片使用 `ResponsiveRow`；图例移到图表下方。
+   - 明细表：时间列和工具列加宽，窗口窄时表格横向滚动，不截断文字。
+   - 洁净度：候选地区表每个地点一行，宽度不够时横向滚动。
+   - 页面内容的顶部边距减小，因为标题已经移到标题栏。
+5. **与上一期相比**：变化超过 10 倍或不到 1/10 时，显示"超过 10 倍"或"不到 1/10"，不再显示 +1236767% 这样的数字（`ReportStrings.change`，报告页和 Markdown 导出共用）。
+6. **文案**：方法说明页、README 和 METHODOLOGY 加入 Claude Desktop 和 Codex 的来源标注；"不包括"一项改为 claude.ai 网页版、Claude 桌面版和 ChatGPT 的普通聊天。

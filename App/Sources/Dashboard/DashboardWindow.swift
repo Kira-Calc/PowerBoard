@@ -45,7 +45,7 @@ enum DashboardSection: String, CaseIterable, Identifiable, Hashable {
         case .details: Icons.table
         case .cleanliness: Icons.leaf
         case .general: Icons.gearSix
-        case .sources: Icons.folderOpen
+        case .sources: Icons.integrations
         case .display: Icons.monitor
         case .method: Icons.function
         case .notifications: Icons.bell
@@ -60,7 +60,7 @@ enum DashboardSection: String, CaseIterable, Identifiable, Hashable {
         case .reports: .yellow
         case .details: .red
         case .cleanliness: .green
-        case .sources: .yellow
+        case .sources: .teal
         case .display: .orange
         case .notifications: .red
         case .general, .method, .methodology, .about: .gray
@@ -104,13 +104,32 @@ struct DashboardView: View {
                     }
                 }
             }
-            .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 260)
+            .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 240)
+            .toolbar(removing: .sidebarToggle)
         } detail: {
-            NavigationStack {
-                page(for: navigation.selection ?? .overview)
-                    .navigationTitle(Text((navigation.selection ?? .overview).title))
-            }
+            let section = navigation.selection ?? .overview
+            page(for: section)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .toolbar {
+                    // Page title in the title bar, level with the window buttons, as in System Settings.
+                    if #available(macOS 26.0, *) {
+                        ToolbarItem(placement: .navigation) { pageTitle(section) }
+                            .sharedBackgroundVisibility(.hidden)
+                    } else {
+                        ToolbarItem(placement: .navigation) { pageTitle(section) }
+                    }
+                }
         }
+    }
+
+    private func pageTitle(_ section: DashboardSection) -> some View {
+        HStack(spacing: 10) {
+            IconBadge(section.icon, color: section.color, size: 26)
+            Text(section.title).font(.title2.weight(.bold))
+        }
+        .padding(.leading, 6)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 
     private static func groupTitle(_ group: DashboardSection.Group) -> LocalizedStringKey {
@@ -154,15 +173,23 @@ final class DashboardWindowController: NSObject, NSWindowDelegate {
         if let section { navigation.selection = section }
         if window == nil {
             let hosting = NSHostingController(rootView: DashboardView(context: context, navigation: navigation))
+            // SwiftUI's toolbar goes into the window. With a toolbar, the sidebar runs up around the window buttons.
+            hosting.sceneBridgingOptions = [.toolbars]
             let window = NSWindow(contentViewController: hosting)
             window.title = AppIdentity.displayName
-            window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-            window.setContentSize(NSSize(width: 960, height: 660))
-            window.contentMinSize = NSSize(width: 760, height: 520)
+            // No visible title bar: the sidebar runs to the top and holds the window buttons.
+            window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+            window.titlebarAppearsTransparent = true
+            window.toolbarStyle = .unified
+            window.titleVisibility = .hidden
+            window.titlebarSeparatorStyle = .none
+            window.setContentSize(NSSize(width: 700, height: 740))
+            window.contentMinSize = NSSize(width: 600, height: 520)
             window.isReleasedWhenClosed = false
             window.delegate = self
-            window.setFrameAutosaveName("Dashboard")
-            if !window.setFrameUsingName("Dashboard") { window.center() }
+            // New name, so the larger frame saved by earlier versions is not restored.
+            window.setFrameAutosaveName("Dashboard.v2")
+            if !window.setFrameUsingName("Dashboard.v2") { window.center() }
             self.window = window
         }
         NSApp.setActivationPolicy(.regular)

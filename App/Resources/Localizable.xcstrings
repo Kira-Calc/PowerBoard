@@ -3974,13 +3974,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Not included: this Mac's own power use, network transfer, model training, and chats on claude.ai or in the Claude desktop app."
+            "value": "Not included: this Mac's own power use, network transfer, model training, and ordinary chats in claude.ai, the Claude desktop app and ChatGPT, which write no token logs on this Mac."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "不包括：本机耗电、网络传输、模型训练，以及 claude.ai 网页版和 Claude 桌面应用中的聊天。"
+            "value": "不包括：本机耗电、网络传输、模型训练，以及 claude.ai 网页版、Claude 桌面版和 ChatGPT 中的普通聊天（它们不在本机写入 token 日志）。"
           }
         }
       }
@@ -4110,13 +4110,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The electricity used by AI providers' data centers to process the requests sent by Claude Code and Codex on this Mac, and the carbon emitted to generate it. Values are estimates derived from token counts and published research, not measurements."
+            "value": "The electricity used in AI providers' data centers to process requests from the AI coding tools on this Mac (Claude Code, Claude Desktop, Codex and Antigravity), and the carbon emitted to generate it. The numbers are derived from token counts and published research. They are not measurements."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "AI 服务商的数据中心处理本机 Claude Code 和 Codex 发出的请求时消耗的电量，以及发电产生的碳排。数值根据 token 数量和公开研究推算，不是实测值。"
+            "value": "AI 服务商的数据中心处理本机 AI 编程工具（Claude Code、Claude Desktop、Codex 和 Antigravity）发出的请求时消耗的电量，以及发电产生的碳排。数值根据 token 数量和公开研究推算，不是实测值。"
           }
         }
       }
@@ -5374,13 +5374,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Data sources"
+            "value": "Integrations"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "数据源"
+            "value": "集成"
           }
         }
       }
@@ -5912,6 +5912,23 @@
         }
       }
     },
+    "source.claudeDesktop": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claude Desktop"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claude Desktop"
+          }
+        }
+      }
+    },
     "source.codex": {
       "extractionState": "manual",
       "localizations": {
@@ -6065,6 +6082,74 @@
         }
       }
     },
+    "sources.integration.found": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ records"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 条记录"
+          }
+        }
+      }
+    },
+    "sources.integration.notFound": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not found"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未找到"
+          }
+        }
+      }
+    },
+    "sources.integrations": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agents"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent"
+          }
+        }
+      }
+    },
+    "sources.integrations.footer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn a tool off to stop reading its logs and hide it everywhere. Its records are kept and come back when you turn it on again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭某个工具后，PowerBoard 不再读取它的日志，各页面也不再显示它。已有记录会保留，重新打开后恢复显示。"
+          }
+        }
+      }
+    },
     "sources.lastRead": {
       "extractionState": "manual",
       "localizations": {
@@ -6129,6 +6214,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "没有找到 Claude Code 的日志。在下方添加路径，或运行一次 Claude Code。"
+          }
+        }
+      }
+    },
+    "sources.notFound.claudeDesktop": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Claude desktop app logs were found. Usage from Cowork appears after you use it; chats in the app write no token logs."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有找到 Claude 桌面版的日志。使用 Cowork 后这里会出现用量；桌面版中的普通聊天不会在本机写入 token 日志。"
           }
         }
       }

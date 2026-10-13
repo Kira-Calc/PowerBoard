@@ -43,10 +43,7 @@ struct ReportSummaryView: View {
         }
     }
 
-    private var changeText: String {
-        guard let change = report.energyChange else { return "–" }
-        return "\(change >= 0 ? "+" : "")\(String(format: "%.0f", change * 100))%"
-    }
+    private var changeText: String { strings.change(report.energyChange) }
 
     private func metric(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -250,7 +247,7 @@ struct ReportUsageChart: View {
         }
         .chartForegroundStyleScale(domain: sources.map(strings.sourceName), range: sources.map(Palette.source))
         .chartLegend(sources.count > 1 ? .visible : .hidden)
-        .chartLegend(position: .top, alignment: .trailing)
+        .chartLegend(position: .bottom, alignment: .leading)
     }
 
     private var cumulativeChart: some View {

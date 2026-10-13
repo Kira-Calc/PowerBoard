@@ -61,6 +61,8 @@ public struct UsageGroup: Sendable, Hashable, Identifiable {
     public var co2GramsMid: Double
     public var firstTimestamp: Date
     public var lastTimestamp: Date
+    /// Client of the group's records ("CLI", "Desktop", …) when they share one.
+    public var client: String? = nil
 }
 
 extension UsageStore {
@@ -177,12 +179,16 @@ extension UsageStore {
                 ORDER BY MAX(ts_utc) DESC
                 """, arguments: arguments)
             var firstSeen: [String: Int64] = [:]
+            var clients: [String: String] = [:]
             for row in try Row.fetchAll(db, sql: """
-                SELECT \(grouping.column), source, MIN(ts_utc) FROM usage_event \(whereClause) GROUP BY 1, source
+                SELECT \(grouping.column), source, MIN(ts_utc), MIN(client), MAX(client) FROM usage_event \(whereClause) GROUP BY 1, source
                 """, arguments: arguments) {
                 let key: String = row[0]
                 let source: String = row[1]
                 firstSeen["\(source)|\(key)"] = row[2]
+                let low: String? = row[3]
+                let high: String? = row[4]
+                if let low, low == high { clients["\(source)|\(key)"] = low }
             }
             return rows.compactMap { row -> UsageGroup? in
                 guard let source = UsageSource(rawValue: row[1]) else { return nil }
@@ -200,9 +206,46 @@ extension UsageStore {
                     energyWh: Estimate(low: row[12], mid: row[13], high: row[14]),
                     co2GramsMid: row[15],
                     firstTimestamp: Date(timeIntervalSince1970: Double(firstMs) / 1000),
-                    lastTimestamp: Date(timeIntervalSince1970: Double(lastMs) / 1000)
+                    lastTimestamp: Date(timeIntervalSince1970: Double(lastMs) / 1000),
+                    client: clients["\(source.rawValue)|\(key)"]
                 )
             }
+        }
+    }
+
+    /// Sessions that have records without a client, for filling clients in after an upgrade.
+    public func sessionsWithoutClient(source: UsageSource) throws -> Set<String> {
+        try read { db in
+            Set(try String.fetchAll(db, sql: "SELECT DISTINCT session_id FROM usage_event WHERE source = ? AND client IS NULL",
+                                    arguments: [source.rawValue]))
+        }
+    }
+
+    public func setClient(_ client: String, source: UsageSource, sessionID: String) throws {
+        try write { db in
+            try db.execute(sql: "UPDATE usage_event SET client = ? WHERE source = ? AND session_id = ? AND client IS NULL",
+                           arguments: [client, source.rawValue, sessionID])
+        }
+    }
+
+    /// Claude Code records whose client is the desktop app (Code tab or Cowork) belong to Claude Desktop.
+    public func moveClaudeDesktopRecords() throws {
+        try write { db in
+            try db.execute(sql: "UPDATE usage_event SET source = ? WHERE source = ? AND client IN (?, ?)",
+                           arguments: [UsageSource.claudeDesktop.rawValue, UsageSource.claudeCode.rawValue,
+                                       UsageClient.desktopCode, UsageClient.cowork])
+        }
+    }
+
+    /// Record counts per source and client, for the integrations page. Records without a client use the empty key.
+    public func clientCounts() throws -> [UsageSource: [String: Int]] {
+        try read { db in
+            var result: [UsageSource: [String: Int]] = [:]
+            for row in try Row.fetchAll(db, sql: "SELECT source, COALESCE(client, ''), COUNT(*) FROM usage_event GROUP BY 1, 2") {
+                guard let source = UsageSource(rawValue: row[0]) else { continue }
+                result[source, default: [:]][row[1]] = row[2]
+            }
+            return result
         }
     }
 

@@ -105,8 +105,53 @@ public actor IngestService {
                 progress?(IngestProgress(filesDone: done, filesTotal: total))
             }
             summary.bySource[source] = sourceSummary
+            if source == .codex { backfillCodexClients(paths: paths) }
+            if source == .claudeCode || source == .claudeDesktop {
+                backfillClaudeClients(paths: paths, source: source)
+                // Desktop app records read before they were told apart move to Claude Desktop.
+                try? store.moveClaudeDesktopRecords()
+            }
         }
         return summary
+    }
+
+    /// Same for Claude logs: the file is named after its session, and the first line with `entrypoint` gives the
+    /// client. Only that field is read.
+    private func backfillClaudeClients(paths: [String], source: UsageSource) {
+        guard let missing = try? store.sessionsWithoutClient(source: source), !missing.isEmpty else { return }
+        for path in paths {
+            let sessionID = URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
+            guard missing.contains(sessionID), let handle = FileHandle(forReadingAtPath: path) else { continue }
+            defer { try? handle.close() }
+            guard let data = try? handle.read(upToCount: 512 * 1024) else { continue }
+            for line in data.split(separator: UInt8(ascii: "\n")).prefix(200) {
+                guard let object = ParsingSupport.jsonObject(Data(line)),
+                      let client = UsageClient.claude(entrypoint: object["entrypoint"] as? String) else { continue }
+                try? store.setClient(client, source: source, sessionID: sessionID)
+                break
+            }
+        }
+    }
+
+    /// Records read before clients were recorded get the client of their Codex session, from the first line of
+    /// each log (`session_meta`: session ID and originator only). Runs only while such records remain.
+    private func backfillCodexClients(paths: [String]) {
+        guard let missing = try? store.sessionsWithoutClient(source: .codex), !missing.isEmpty else { return }
+        for path in paths {
+            guard let handle = FileHandle(forReadingAtPath: path) else { continue }
+            defer { try? handle.close() }
+            // session_meta can be long (it holds instructions), so read enough to reach the end of the first line.
+            guard let data = try? handle.read(upToCount: 256 * 1024),
+                  let firstLine = data.split(separator: UInt8(ascii: "\n"), maxSplits: 1).first,
+                  let object = ParsingSupport.jsonObject(Data(firstLine)),
+                  object["type"] as? String == "session_meta",
+                  let payload = object["payload"] as? [String: Any],
+                  let sessionID = (payload["id"] as? String) ?? (payload["session_id"] as? String),
+                  missing.contains(sessionID),
+                  let client = UsageClient.codex(originator: payload["originator"] as? String)
+            else { continue }
+            try? store.setClient(client, source: .codex, sessionID: sessionID)
+        }
     }
 
     /// Antigravity databases change in place, so a changed conversation is read again as a whole and its
@@ -174,8 +219,8 @@ public actor IngestService {
                 if line.allSatisfy({ $0 == UInt8(ascii: " ") || $0 == UInt8(ascii: "\t") }) { continue }
                 let outcome: ParseOutcome
                 switch source {
-                case .claudeCode:
-                    outcome = ClaudeCodeParser.parse(line: line)
+                case .claudeCode, .claudeDesktop:
+                    outcome = ClaudeCodeParser.parse(line: line, source: source)
                 case .codex:
                     outcome = CodexParser.parse(line: line, filePath: path, lineNumber: chunk.firstLineNumber + index, state: &codexState)
                 case .antigravity:

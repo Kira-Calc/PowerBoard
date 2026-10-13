@@ -53,7 +53,7 @@ import Testing
     @Test func emptyDatabase() throws {
         let snapshot = try SnapshotBuilder.build(store: UsageStore(), now: utc("2026-10-12T02:00:00Z"), calendar: calendar("UTC"))
         #expect(snapshot.today.energyWh == .zero)
-        #expect(snapshot.today.bySource.keys.sorted() == ["antigravity", "claude_code", "codex"])
+        #expect(snapshot.today.bySource.keys.sorted() == ["antigravity", "claude_code", "claude_desktop", "codex"])
         #expect(snapshot.sessions.isEmpty)
         #expect(snapshot.lastHourSparklineWh == Array(repeating: 0, count: 12))
     }

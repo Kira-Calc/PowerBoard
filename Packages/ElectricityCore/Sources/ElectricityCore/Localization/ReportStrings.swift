@@ -30,6 +30,7 @@ public struct ReportStrings: Sendable {
         case energyChart, energyCumulative, tokenChart, tokenCumulative
         case energyMix, cleanShare, mixBasisPeriod, mixBasisRecent, byGridLevel, unrecordedLevel
         case fuel(FuelGroup), gridLevel(GridLevel)
+        case muchHigher, muchLower
 
         var english: String {
             switch self {
@@ -82,6 +83,8 @@ public struct ReportStrings: Sendable {
                 case .month: "Last 30 days"
                 case .year: "Last 12 months"
                 }
+            case .muchHigher: "over 10×"
+            case .muchLower: "under 1/10"
             case .energyChart: "Energy"
             case .energyCumulative: "Energy, cumulative"
             case .tokenChart: "Tokens"
@@ -163,6 +166,8 @@ public struct ReportStrings: Sendable {
                 case .month: "过去 30 天"
                 case .year: "过去 12 个月"
                 }
+            case .muchHigher: "超过 10 倍"
+            case .muchLower: "不到 1/10"
             case .energyChart: "用电"
             case .energyCumulative: "累计用电"
             case .tokenChart: "Token"
@@ -197,6 +202,7 @@ public struct ReportStrings: Sendable {
     public func sourceName(_ source: UsageSource?) -> String {
         switch source {
         case .claudeCode: "Claude Code"
+        case .claudeDesktop: "Claude Desktop"
         case .codex: "Codex"
         case .antigravity: "Antigravity"
         case nil: "-"
@@ -215,6 +221,15 @@ public struct ReportStrings: Sendable {
         case (.unmapped, .zh): "无对应系数"
         case (nil, _): "-"
         }
+    }
+
+    /// Change against the previous period: "+42%", or "over 10×" when the previous period had almost no usage and a
+    /// percentage would be unreadable (for example +1,200,000%).
+    public func change(_ change: Double?) -> String {
+        guard let change else { return "–" }
+        if change >= 9 { return self(.muchHigher) }
+        if change <= -0.9 { return self(.muchLower) }
+        return "\(change >= 0 ? "+" : "")\(String(format: "%.0f", change * 100))%"
     }
 
     /// "Weekly report", or "Last 7 days" for a rolling report.

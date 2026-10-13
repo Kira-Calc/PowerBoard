@@ -4,7 +4,8 @@ import Foundation
 public enum ClaudeCodeParser {
     static let syntheticModel = "<synthetic>"
 
-    public static func parse(line: Data) -> ParseOutcome {
+    /// `source` is the source of the file being read; records written by the desktop app go to Claude Desktop.
+    public static func parse(line: Data, source: UsageSource = .claudeCode) -> ParseOutcome {
         guard let object = ParsingSupport.jsonObject(line) else { return .skipped(.invalidJSON) }
         guard object["type"] as? String == "assistant" else { return .ignored }
         guard let message = object["message"] as? [String: Any] else { return .ignored }
@@ -35,14 +36,16 @@ public enum ClaudeCodeParser {
             dedupeKey = "sha256:" + ParsingSupport.sha256Hex(line)
         }
 
+        let entrypoint = object["entrypoint"] as? String
         return .usage(ParsedUsage(
             dedupeKey: dedupeKey,
-            source: .claudeCode,
+            source: UsageClient.claudeSource(entrypoint: entrypoint, default: source),
             sessionID: sessionID,
             projectPath: object["cwd"] as? String,
             model: model,
             timestamp: timestamp,
-            tokens: tokens
+            tokens: tokens,
+            client: UsageClient.claude(entrypoint: entrypoint)
         ))
     }
 }

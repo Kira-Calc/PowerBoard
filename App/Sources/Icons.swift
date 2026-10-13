@@ -27,6 +27,8 @@ enum Icons {
     static let leaf = Icon("leaf", badge: "leaf.fill")
     static let pieChart = Icon("chart.pie", badge: "chart.pie.fill")
     static let folderOpen = Icon("folder", badge: "folder.fill")
+    static let integrations = Icon("puzzlepiece.extension", badge: "puzzlepiece.extension.fill")
+    static let checkmarkSeal = Icon("checkmark.circle.fill")
     static let monitor = Icon("menubar.rectangle")
     static let function = Icon("function")
     static let bell = Icon("bell", badge: "bell.fill")

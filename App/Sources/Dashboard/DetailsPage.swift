@@ -8,6 +8,7 @@ struct DetailsPage: View {
     enum SourceFilter: String, CaseIterable, Identifiable {
         case all
         case claudeCode
+        case claudeDesktop
         case codex
         case antigravity
 
@@ -17,6 +18,7 @@ struct DetailsPage: View {
             switch self {
             case .all: true
             case .claudeCode: source == .claudeCode
+            case .claudeDesktop: source == .claudeDesktop
             case .codex: source == .codex
             case .antigravity: source == .antigravity
             }
@@ -60,6 +62,7 @@ struct DetailsPage: View {
                     Picker("details.tool", selection: $sourceFilter) {
                         Text("details.tool.all").tag(SourceFilter.all)
                         if used.contains(.claudeCode) { Text("source.claudeCode").tag(SourceFilter.claudeCode) }
+                        if used.contains(.claudeDesktop) { Text("source.claudeDesktop").tag(SourceFilter.claudeDesktop) }
                         if used.contains(.codex) { Text("source.codex").tag(SourceFilter.codex) }
                         if used.contains(.antigravity) { Text("source.antigravity").tag(SourceFilter.antigravity) }
                     }
@@ -79,16 +82,17 @@ struct DetailsPage: View {
             }
             Table(rows, sortOrder: $sortOrder) {
                 TableColumn("column.lastActive", value: \.lastTimestamp) { row in
-                    Text(Formatting.dateTime(row.lastTimestamp)).monospacedDigit()
+                    Text(Formatting.dateTime(row.lastTimestamp)).monospacedDigit().lineLimit(1)
                 }
-                .width(min: 120, ideal: 150)
+                .width(min: 150, ideal: 160)
                 TableColumn("column.tool", value: \.toolName) { row in
                     HStack(spacing: 6) {
                         Circle().fill(Palette.source(row.group.source)).frame(width: 8, height: 8)
-                        Text(row.toolName)
+                        Text(row.toolName).lineLimit(1)
                     }
                 }
-                .width(min: 90, ideal: 100)
+                // Wide enough for "Claude Desktop · Cowork"; a narrow window scrolls the table sideways instead.
+                .width(min: 150, ideal: 170)
                 TableColumn(nameColumnTitle, value: \.name) { row in
                     Text(verbatim: row.name)
                         .help(row.group.projectPath ?? row.group.key)
@@ -145,7 +149,7 @@ struct DetailsPage: View {
                 Row(
                     group: group,
                     name: displayName(group),
-                    toolName: SourceText.name(group.source),
+                    toolName: SourceText.name(group.source, client: group.client),
                     confidence: Formatting.confidence(group.tierConfidence)
                 )
             }

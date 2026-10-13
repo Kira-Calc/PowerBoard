@@ -31,6 +31,8 @@ public struct UsageEventRow: Sendable, Hashable, Codable, FetchableRecord, Persi
     public var energyWhMid: Double
     public var energyWhHigh: Double
     public var co2GMid: Double
+    /// Client that wrote the record ("CLI", "Desktop", …). Nil for records read before clients were recorded.
+    public var client: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -56,6 +58,7 @@ public struct UsageEventRow: Sendable, Hashable, Codable, FetchableRecord, Persi
         case energyWhMid = "energy_wh_mid"
         case energyWhHigh = "energy_wh_high"
         case co2GMid = "co2_g_mid"
+        case client
     }
 
     public init(usage: ParsedUsage, result: EnergyResult) {
@@ -84,6 +87,7 @@ public struct UsageEventRow: Sendable, Hashable, Codable, FetchableRecord, Persi
         energyWhMid = 0
         energyWhHigh = 0
         co2GMid = 0
+        client = usage.client
         apply(result)
     }
 
@@ -241,6 +245,9 @@ public final class UsageStore: Sendable {
                 t.column("running", .boolean).notNull()
                 t.column("event_utc", .integer).notNull()
             }
+        }
+        migrator.registerMigration("v5-client") { db in
+            try db.alter(table: "usage_event") { t in t.add(column: "client", .text) }
         }
         return migrator
     }

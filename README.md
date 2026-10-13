@@ -12,7 +12,7 @@
 
 ## 这是什么
 
-PowerBoard 是一个 macOS 菜单栏应用，也是你本机 AI 编程工具的**信息面板**。它读取 Claude Code、Codex 和 Google Antigravity 在本机写下的日志，把分散在各个工具里的信息集中到一处：
+PowerBoard 是一个 macOS 菜单栏应用，也是你本机 AI 编程工具的**信息面板**。它读取 Claude Code、Claude Desktop、Codex 和 Google Antigravity 在本机写下的日志，把分散在各个工具里的信息集中到一处：
 
 - **用量统计**：每个工具、模型、项目和会话的 token 用量，按小时、天、周查看趋势，生成日 / 周 / 月 / 年报告并导出。
 - **会话管理**：列出正在运行的对话及其状态，点击即可切换到对应的终端；任务完成时提醒你。
@@ -40,8 +40,11 @@ PowerBoard 只显示你实际在用的工具。例如只用 Claude Code 的用�
 | 工具 | 读取的本地数据 | 状态 |
 | --- | --- | --- |
 | Claude Code | `~/.claude/projects/**/*.jsonl` | 支持，已与 ccusage 核对（偏差 0.035%） |
-| Codex | `~/.codex/sessions/**/*.jsonl` | 支持 |
+| Claude Desktop | Cowork：`~/Library/Application Support/Claude/local-agent-mode-sessions/**/.claude/projects/`；Code 标签页：写在 `~/.claude/projects`，按日志中的来源字段区分 | 支持（Cowork、Code 标签页）。普通聊天不在本机写入 token 日志，无法统计 |
+| Codex | `~/.codex/sessions/**/*.jsonl`（命令行与桌面版共用） | 支持，按来源标注 CLI、Desktop、VS Code、SDK |
 | Google Antigravity | `~/.gemini/antigravity*` 下的 SQLite | 支持，尚未用真实数据核对 |
+
+在"设置 > 集成"中可以看到每个工具是否检测到、记录了多少条，并可以单独开关。
 
 **后续会支持更多 AI 编程工具。** 欢迎在 Issues 中告诉我们你在用的工具。
 

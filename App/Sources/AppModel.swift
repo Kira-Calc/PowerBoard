@@ -36,9 +36,13 @@ final class AppModel {
     /// Tools that have usage records. Lists in the UI show only these, so someone who uses one tool sees only that
     /// tool. Until the first records are read, every tool is listed.
     var usedSources: [UsageSource] {
-        let used = UsageSource.allCases.filter { (sourceStatuses[$0]?.stats.eventCount ?? 0) > 0 }
-        return used.isEmpty ? UsageSource.allCases : used
+        let enabled = UsageSource.allCases.filter { !disabledSources.contains($0) }
+        let used = enabled.filter { (sourceStatuses[$0]?.stats.eventCount ?? 0) > 0 }
+        return used.isEmpty ? enabled : used
     }
+
+    /// Tools turned off on the integrations page (mirrors `AppSettings.disabledSources`).
+    var disabledSources: Set<UsageSource> = []
 
     /// Providers behind the tools in use, in the same order.
     var usedProviders: [GridProvider] {

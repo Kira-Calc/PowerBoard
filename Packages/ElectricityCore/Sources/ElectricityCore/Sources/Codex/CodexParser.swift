@@ -69,6 +69,8 @@ public struct CodexParserState: Sendable, Hashable, Codable {
     public var taskRunning: Bool?
     /// Time of the latest task event, as written in the log.
     public var taskEventAt: Date?
+    /// Client from `session_meta.originator` (`UsageClient`).
+    public var client: String?
 
     public init(sessionID: String? = nil, cwd: String? = nil, model: String? = nil, lastTotal: CodexTokenUsage? = nil) {
         self.sessionID = sessionID
@@ -99,6 +101,7 @@ public enum CodexParser {
                 state.sessionID = id
             }
             if let cwd = payload["cwd"] as? String { state.cwd = cwd }
+            if let client = UsageClient.codex(originator: payload["originator"] as? String) { state.client = client }
             return .ignored
 
         case "turn_context":
@@ -170,7 +173,8 @@ public enum CodexParser {
             projectPath: state.cwd,
             model: state.model ?? unknownModel,
             timestamp: timestamp,
-            tokens: increment.tokenCounts
+            tokens: increment.tokenCounts,
+            client: state.client
         ))
     }
 }

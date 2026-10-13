@@ -29,6 +29,7 @@ enum Palette {
     static func source(_ source: UsageSource) -> Color {
         switch source {
         case .claudeCode: .orange
+        case .claudeDesktop: Color(red: 0.80, green: 0.47, blue: 0.36)
         case .codex: .yellow
         case .antigravity: .red
         }

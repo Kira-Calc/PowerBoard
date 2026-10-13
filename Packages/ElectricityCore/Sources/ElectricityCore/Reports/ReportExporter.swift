@@ -174,7 +174,7 @@ public enum ReportExporter {
         lines.append("- \(t(.tokens))\(sep)\(ValueFormatting.tokens(tokens.total))" + paren(tokenParts))
         lines.append("- \(t(.sessions))\(sep)\(report.sessionCount)")
         if let change = report.energyChange {
-            lines.append("- \(t(.comparedWithPrevious))\(sep)\(change >= 0 ? "+" : "")\(String(format: "%.0f", change * 100))%")
+            lines.append("- \(t(.comparedWithPrevious))\(sep)\(t.change(change))")
         } else {
             lines.append("- \(t(.comparedWithPrevious))\(sep)\(t(.noPrevious))")
         }

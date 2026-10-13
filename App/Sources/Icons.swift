@@ -34,6 +34,9 @@ enum Icons {
     static let bell = Icon("bell", badge: "bell.fill")
     static let bookOpen = Icon("book", badge: "book.fill")
     static let export = Icon("square.and.arrow.up")
+    static let receipt = Icon("receipt", badge: "receipt.fill")
+    /// Placeholder for the receipt header until the `ReceiptLogo` asset exists (appendix R5.2).
+    static let receiptLogo = Icon("bolt.fill")
     static let arrowsClockwise = Icon("arrow.clockwise")
     static let plus = Icon("plus")
     static let trash = Icon("trash")

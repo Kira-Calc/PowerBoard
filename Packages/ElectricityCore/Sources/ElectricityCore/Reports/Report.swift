@@ -91,6 +91,8 @@ public struct Report: Sendable, Hashable {
     public var previousTotals: UsageTotals
     public var bySource: [ReportBreakdownItem]
     public var byModel: [ReportBreakdownItem]
+    /// Models per tool, not merged across tools, largest energy first (for the receipt's detail).
+    public var byToolModel: [ReportBreakdownItem]
     /// Keyed by full project path; empty key for records without one.
     public var byProject: [ReportBreakdownItem]
     public var trend: [SeriesBucket]
@@ -193,6 +195,10 @@ public enum ReportBuilder {
             previousTotals: try store.totals(from: previous.start, to: previous.end),
             bySource: bySource,
             byModel: merge(models, keepSource: true),
+            byToolModel: models.sorted { $0.energyWh.mid > $1.energyWh.mid }.map { group in
+                ReportBreakdownItem(key: group.key, source: group.source, tierConfidence: group.tierConfidence, eventCount: group.eventCount,
+                                    tokens: group.tokens, energyWh: group.energyWh, co2GramsMid: group.co2GramsMid)
+            },
             byProject: merge(projects, keepSource: false),
             trend: trend,
             peak: trend.filter { $0.serverWh > 0 }.max { $0.serverWh < $1.serverWh },

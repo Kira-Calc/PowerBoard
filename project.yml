@@ -69,6 +69,9 @@ targets:
         basedOnDependencyAnalysis: false
     dependencies:
       - package: ElectricityCore
+        product: ElectricityCore
+      - package: ElectricityCore
+        product: ElectricityReceipt
       - target: PowerBoardCLI
         embed: true
         codeSign: true

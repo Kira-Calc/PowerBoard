@@ -12,6 +12,7 @@ struct ReportsPage: View {
     @State private var anchor = Date()
     @State private var report: Report?
     @State private var showExport = false
+    @State private var receipt: ReceiptSheetPurpose?
     @State private var showYear = false
 
     private let strings = ReportStrings.app
@@ -29,12 +30,16 @@ struct ReportsPage: View {
                 }
             }
             AutoExportCard(settings: context.autoExport)
+            ReceiptSettingsCard()
         }
         .task(id: [AnyHashable(period), AnyHashable(anchor), AnyHashable(rolling), AnyHashable(context.model.dataVersion)]) {
             await load()
         }
         .sheet(isPresented: $showExport) {
             if let report { ExportSheet(report: report, store: context.model.store) }
+        }
+        .sheet(item: $receipt) { purpose in
+            if let report { ReceiptSheet(report: report, context: context, purpose: purpose) }
         }
         .sheet(isPresented: $showYear) {
             YearSummaryView(context: context, date: anchor)
@@ -55,7 +60,14 @@ struct ReportsPage: View {
             try? ReportBuilder.build(store: store, period: period, containing: anchor, rolling: rolling, energyMixes: mixes, now: now)
         }.value
         if let result { withAnimation(.smooth(duration: 0.3)) { report = result } }
+        // Development aid: `-openReceipt image` or `-openReceipt print` opens the receipt sheet once at launch.
+        if !Self.openedReceipt, let purpose = UserDefaults.standard.string(forKey: "openReceipt").flatMap(ReceiptSheetPurpose.init) {
+            Self.openedReceipt = true
+            receipt = purpose
+        }
     }
+
+    @MainActor private static var openedReceipt = false
 
     /// Two rows, so the period fits in a narrow window: what to show and export, then which period.
     private var controls: some View {
@@ -79,11 +91,16 @@ struct ReportsPage: View {
                 .fixedSize()
                 .help(Text("reports.mode.help"))
                 Spacer(minLength: 0)
-                Button {
-                    showExport = true
+                Menu {
+                    Button("reports.export.report") { showExport = true }
+                    Divider()
+                    Button("reports.export.receiptImage") { receipt = .image }
+                    Button("reports.export.receiptPrint") { receipt = .print }
+                        .disabled(ReceiptSettings.printMethod == .none)
                 } label: {
                     Label { Text("reports.export") } icon: { SymbolIcon(Icons.export, size: 14) }
                 }
+                .fixedSize()
                 .disabled(report == nil)
             }
             HStack(spacing: 8) {

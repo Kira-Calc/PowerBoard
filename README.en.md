@@ -37,7 +37,7 @@ All numbers are estimates with a wide range. See [docs/METHODOLOGY.md](docs/METH
 - **Dashboard:** live overview with charts by tool, reports (day, week, month, year, year in review), per-record details, grid cleanliness, and settings.
 - **Claude Code status line:** today's energy and carbon at the bottom of Claude Code, through the bundled `powerboard` command.
 - **Reports:** a calendar day, week, month or year, or the period up to now (the last 24 hours, 7 days, 30 days or 12 months), with energy, carbon and token totals, bar and cumulative charts for energy and tokens, and an estimated energy mix (generation sources and fossil-free share).
-- **Exports:** CSV, JSON, Markdown, PNG and PDF, by hand or automatically into a folder. Choose what to include (trend charts, energy mix, by tool, model or project, method) and the layout follows. Images and PDFs carry the PowerBoard icon and name.
+- **Exports:** CSV, JSON, Markdown, PNG and PDF, by hand or automatically into a folder. Choose what to include (trend charts, energy mix, by tool, model or project, method) and the layout follows. A thermal-receipt version (80 or 58 mm) can be copied, saved as PNG or printed through the system print dialog. Images and PDFs carry the PowerBoard icon and name.
 
 Not covered: chats in claude.ai or the Claude desktop app. They write no local token logs.
 

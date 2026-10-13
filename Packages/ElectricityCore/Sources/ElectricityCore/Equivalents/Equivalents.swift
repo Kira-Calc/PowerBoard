@@ -21,19 +21,38 @@ public struct EquivalentItem: Sendable, Hashable, Decodable, Identifiable {
     public var source: String
     /// For items measured in time: the duration of one unit, in seconds.
     public var durationSeconds: Double?
+    /// The item the receipt always lists first (appendix R6.1). At most one item should set it.
+    public var receiptAnchor: Bool
+    /// Receipt text per language code ("zh", "en"), with `%@` where the number goes (appendix R6.4).
+    public var receiptLabel: [String: String]?
 
     enum CodingKeys: String, CodingKey {
-        case id, kind, wh, basis, source
+        case id, kind, wh, basis, source, receiptAnchor, receiptLabel
         case durationSeconds = "duration_seconds"
     }
 
-    public init(id: String, kind: Kind, wh: Double, basis: String = "", source: String = "", durationSeconds: Double? = nil) {
+    public init(id: String, kind: Kind, wh: Double, basis: String = "", source: String = "", durationSeconds: Double? = nil,
+                receiptAnchor: Bool = false, receiptLabel: [String: String]? = nil) {
         self.id = id
         self.kind = kind
         self.wh = wh
         self.basis = basis
         self.source = source
         self.durationSeconds = durationSeconds
+        self.receiptAnchor = receiptAnchor
+        self.receiptLabel = receiptLabel
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        kind = try container.decode(Kind.self, forKey: .kind)
+        wh = try container.decode(Double.self, forKey: .wh)
+        basis = try container.decode(String.self, forKey: .basis)
+        source = try container.decode(String.self, forKey: .source)
+        durationSeconds = try container.decodeIfPresent(Double.self, forKey: .durationSeconds)
+        receiptAnchor = try container.decodeIfPresent(Bool.self, forKey: .receiptAnchor) ?? false
+        receiptLabel = try container.decodeIfPresent([String: String].self, forKey: .receiptLabel)
     }
 }
 

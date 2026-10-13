@@ -192,6 +192,13 @@ final class ActiveSessionMonitor {
             }
         }
 
+        // Codex chats without a project run in a folder named after the first character's pinyin, so the folder name
+        // says little; use the title Codex shows in its sidebar.
+        let codexTitles = titles.codexTitles()
+        for index in sessions.indices where sessions[index].source == .codex && sessions[index].title == nil {
+            sessions[index].title = codexTitles[sessions[index].sessionID]
+        }
+
         if let store, let energy = try? store.sessionEnergy(sessions.map(\.sessionID)) {
             for index in sessions.indices { sessions[index].energyWh = energy[sessions[index].sessionID] ?? 0 }
         }
@@ -310,6 +317,7 @@ final class TitleCache: @unchecked Sendable {
     private let lock = NSLock()
     private var entries: [String: Entry] = [:]
     private var paths: [String: URL] = [:]
+    private var codex: (titles: [String: String], modified: [Date?])?
 
     func title(for sessionID: String) -> String? {
         lock.lock()
@@ -328,5 +336,21 @@ final class TitleCache: @unchecked Sendable {
         let title = ClaudeCodeTitle.latest(inLogAt: url)
         entries[sessionID] = Entry(title: title, modified: modified, checked: now)
         return title
+    }
+
+    /// Codex titles by session ID, read again only when an index file changed.
+    func codexTitles() -> [String: String] {
+        lock.lock()
+        defer { lock.unlock() }
+        let urls = CodexTitles.indexURLs(sessionRoots: LogLocations.standard().codex)
+        let modified = urls.map { (try? FileManager.default.attributesOfItem(atPath: $0.path)[.modificationDate]) as? Date }
+        if let codex, codex.modified == modified { return codex.titles }
+        var titles: [String: String] = [:]
+        for url in urls {
+            guard let data = try? Data(contentsOf: url) else { continue }
+            titles.merge(CodexTitles.read(data)) { _, new in new }
+        }
+        codex = (titles, modified)
+        return titles
     }
 }

@@ -23,6 +23,7 @@ struct ReceiptSheet: View {
     @AppStorage(ReceiptSettings.paperEffectKey) private var paperEffect = true
     @AppStorage(ReceiptSettings.showsQRCodeKey) private var showsQRCode = true
     @AppStorage(ReceiptSettings.customerKey) private var customer = ""
+    @AppStorage(ReceiptSettings.languageKey) private var language: ExportLanguage = .app
     @State private var monochrome = false
     /// One serial and print time per opened sheet, so the preview and the output match. The serial is used up only
     /// when the receipt goes out.
@@ -79,6 +80,12 @@ struct ReceiptSheet: View {
                     Text("receipt.period.note").font(.caption).foregroundStyle(.secondary)
                 }
             }
+            Picker("receipt.language", selection: $language) {
+                Text("export.language.app").tag(ExportLanguage.app)
+                Text(verbatim: "简体中文").tag(ExportLanguage.chinese)
+                Text(verbatim: "English").tag(ExportLanguage.english)
+            }
+            .fixedSize()
             Picker("receipt.paper", selection: $paper) {
                 Text(verbatim: "80 mm").tag(ReceiptPaper.mm80)
                 Text(verbatim: "58 mm").tag(ReceiptPaper.mm58)
@@ -132,11 +139,11 @@ struct ReceiptSheet: View {
     private var model: ReceiptModel {
         let enabled = Set(context.settings.enabledEquivalents(from: context.model.equivalents).map(\.id))
         return ReceiptModel(report: report, equivalents: context.model.equivalents, enabledEquivalentIDs: enabled,
-                            language: ReceiptSettings.language, serialNumber: serial,
+                            language: language.strings.language, serialNumber: serial,
                             customer: customer, showsQRCode: showsQRCode, printedAt: printedAt)
     }
 
-    private var renderKey: [AnyHashable] { [paper, paperEffect, showsQRCode, customer, monochrome] }
+    private var renderKey: [AnyHashable] { [paper, paperEffect, showsQRCode, customer, monochrome, language] }
 
     /// The PNG look, or with "preview as printed" the 1-bit image the printer gets, scaled to the same size.
     private func renderPreview() {

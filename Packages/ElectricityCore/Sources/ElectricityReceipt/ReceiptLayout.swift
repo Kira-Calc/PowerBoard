@@ -41,6 +41,12 @@ public enum ReceiptPaper: String, Sendable, Hashable, CaseIterable, Identifiable
         }
     }
 
+    /// Blank paper on each side of the printable area, in dots (8 dots per millimetre): 4 mm on 80 mm paper,
+    /// 5 mm on 58 mm. Only the PNG paper effect shows it; the printer leaves it blank on its own.
+    public var sideMarginDots: CGFloat {
+        CGFloat(((paperMillimetres - printableMillimetres) / 2 * 8).rounded())
+    }
+
     public var logoSize: CGFloat {
         switch self {
         case .mm80: 96

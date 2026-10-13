@@ -26,7 +26,7 @@ public struct ReceiptStrings: Sendable {
 
         var english: String {
             switch self {
-            case .subtitle: "AI POWER RECEIPT"
+            case .subtitle: "SERVER-SIDE AI ENERGY ESTIMATE"
             case .customer: "FOR"
             case .serial: "No."
             case .kind: "Type"
@@ -55,8 +55,8 @@ public struct ReceiptStrings: Sendable {
             case .monthlyEnergy: "Energy by month"
             case .peakDay(let value): "Peak \(value)"
             case .equivalents: "Equivalent to"
-            case .noUsageToday: "No energy used today yet"
-            case .noUsagePeriod: "No energy used in this period"
+            case .noUsageToday: "No usage recorded today"
+            case .noUsagePeriod: "No usage recorded in this period"
             case .total: "TOTAL"
             case .disclaimer: "Estimates only. Not a proof of purchase."
             case .methodHint: "Method: Dashboard > About > Methodology"
@@ -67,7 +67,7 @@ public struct ReceiptStrings: Sendable {
 
         var chinese: String {
             switch self {
-            case .subtitle: "本机 AI 用电小票"
+            case .subtitle: "AI 推理用电估算（服务端）"
             case .customer: "顾客"
             case .serial: "单号"
             case .kind: "类型"
@@ -96,8 +96,8 @@ public struct ReceiptStrings: Sendable {
             case .monthlyEnergy: "每月用电"
             case .peakDay(let value): "最高 \(value)"
             case .equivalents: "相当于"
-            case .noUsageToday: "今天还没有用电"
-            case .noUsagePeriod: "这段时间还没有用电"
+            case .noUsageToday: "今天暂无用量记录"
+            case .noUsagePeriod: "这段时间暂无用量记录"
             case .total: "合计"
             case .disclaimer: "本单据为估算值，不作报销凭证"
             case .methodHint: "计算方法见 操作台 > 关于 > 方法说明"

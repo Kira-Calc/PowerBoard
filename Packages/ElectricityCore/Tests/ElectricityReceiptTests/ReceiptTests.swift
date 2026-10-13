@@ -80,11 +80,11 @@ import Testing
         #expect(model.groups == [])
         #expect(model.others == nil)
         #expect(model.equivalents == [])
-        #expect(model.emptyNote == "今天还没有用电")
+        #expect(model.emptyNote == "今天暂无用量记录")
         #expect(model.totalEnergy == "0.00 Wh")
         #expect(model.tokenMix?.shares == [0, 0, 0, 0])
         let english = ReceiptFixtures.model(ReceiptFixtures.report(period: .week, lines: []), language: .en)
-        #expect(english.emptyNote == "No energy used in this period")
+        #expect(english.emptyNote == "No usage recorded in this period")
     }
 
     @Test func eightRowsFitAndANinthIsFolded() {
@@ -165,7 +165,7 @@ import Testing
         let plain = try ReceiptRenderer.png(model: model, paper: .mm80, logo: ReceiptFixtures.logo, paperEffect: false)
         #expect(NSBitmapImageRep(data: plain)?.pixelsWide == 1152)
         let paper = try ReceiptRenderer.png(model: model, paper: .mm80, logo: ReceiptFixtures.logo, paperEffect: true)
-        #expect(NSBitmapImageRep(data: paper)?.pixelsWide == (576 + 64) * 2)
+        #expect(NSBitmapImageRep(data: paper)?.pixelsWide == (576 + 2 * 32 + 2 * 40) * 2)
         let narrow = try ReceiptRenderer.png(model: model, paper: .mm58, logo: ReceiptFixtures.logo, paperEffect: false)
         #expect(NSBitmapImageRep(data: narrow)?.pixelsWide == 768)
     }

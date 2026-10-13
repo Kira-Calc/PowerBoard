@@ -86,7 +86,7 @@ public struct ReceiptView: View {
         case .image(let image):
             Image(decorative: image, scale: 1)
                 .resizable()
-                .interpolation(.none)
+                .interpolation(.high)
                 .scaledToFit()
                 .frame(width: size, height: size)
         case .placeholder(let symbol):
@@ -261,14 +261,10 @@ public struct ReceiptView: View {
             .font(ReceiptFont.small)
             .multilineTextAlignment(.center)
             if let payload = model.qrPayload, let qr = ReceiptCodes.qr(payload) {
-                Image(decorative: qr, scale: 1)
-                    .interpolation(.none)
-                    .padding(.top, 14)
+                printed(qr).padding(.top, 14)
             }
             if let barcode = ReceiptCodes.barcode(model.serial, maxWidth: layout.width - 48) {
-                Image(decorative: barcode, scale: 1)
-                    .interpolation(.none)
-                    .padding(.top, 10)
+                printed(barcode).padding(.top, 10)
             }
             Text(verbatim: model.serial)
             Text(verbatim: strings(.thanks))
@@ -276,6 +272,13 @@ public struct ReceiptView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 10)
+    }
+
+    /// A black-and-white code drawn as black only, so the paper shows through where the code is white.
+    private func printed(_ code: CGImage) -> some View {
+        Color.black
+            .frame(width: CGFloat(code.width), height: CGFloat(code.height))
+            .mask(Image(decorative: code, scale: 1).interpolation(.none).colorInvert().luminanceToAlpha())
     }
 
     // MARK: Grid pieces

@@ -51,16 +51,22 @@ enum ReceiptSettings {
         defaults.set(max(used, number), forKey: serialCountKey)
     }
 
-    /// The app's `ReceiptLogo` image when the asset catalog has one, otherwise the placeholder (appendix R5.2).
+    /// The `ReceiptLogo` asset, the app icon's plug in flat black (`scripts/make-receipt-logo.swift`), drawn from its
+    /// vector data at 4 times the largest logo size so it stays sharp at 2x. The placeholder only if it is missing.
     static var logo: ReceiptLogo {
-        if let image = NSImage(named: "ReceiptLogo")?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-            return .image(image)
+        if let vector = NSImage(named: "ReceiptLogo") {
+            var rect = NSRect(x: 0, y: 0, width: ReceiptPaper.mm80.logoSize * 4, height: ReceiptPaper.mm80.logoSize * 4)
+            if let image = vector.cgImage(forProposedRect: &rect, context: nil, hints: nil) { return .image(image) }
         }
         return .placeholder(symbol: Icons.receiptLogo.badge)
     }
 
-    /// The language receipts are made in: the app's (appendix R10).
-    static var language: CLILanguageCode { ReportStrings.app.language }
+    static let languageKey = "receipt.language"
+
+    /// The language chosen in the receipt sheet: the app's by default (appendix R10).
+    static var language: CLILanguageCode {
+        (UserDefaults.standard.string(forKey: languageKey).flatMap(ExportLanguage.init) ?? .app).strings.language
+    }
 
     /// `PowerBoard-receipt-2026-10-14-daily.png` (appendix R2.4).
     static func fileName(_ report: Report) -> String {

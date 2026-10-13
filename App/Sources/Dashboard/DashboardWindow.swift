@@ -104,7 +104,7 @@ struct DashboardView: View {
                     }
                 }
             }
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 240)
+            .navigationSplitViewColumnWidth(min: 190, ideal: 200, max: 240)
             .toolbar(removing: .sidebarToggle)
         } detail: {
             let section = navigation.selection ?? .overview
@@ -120,6 +120,11 @@ struct DashboardView: View {
                     }
                 }
         }
+        // The sidebar always stays open: no collapse button, and the window cannot get narrow enough to hide it.
+        .navigationSplitViewStyle(.balanced)
+        .modifier(HideWindowTitle())
+        .frame(minWidth: DashboardWindowController.minimumSize.width, maxWidth: DashboardWindowController.maximumSize.width,
+               minHeight: DashboardWindowController.minimumSize.height, maxHeight: DashboardWindowController.maximumSize.height)
     }
 
     private func pageTitle(_ section: DashboardSection) -> some View {
@@ -161,6 +166,10 @@ struct DashboardView: View {
 /// Hosts the dashboard. The app shows a Dock icon while the window is open (SPEC 8.1).
 @MainActor
 final class DashboardWindowController: NSObject, NSWindowDelegate {
+    /// Smallest size at which every page lays out properly; the largest size keeps lines readable.
+    static let minimumSize = NSSize(width: 600, height: 520)
+    static let maximumSize = NSSize(width: 1100, height: 1300)
+
     private let context: DashboardContext
     private let navigation = DashboardNavigation()
     private var window: NSWindow?
@@ -184,7 +193,11 @@ final class DashboardWindowController: NSObject, NSWindowDelegate {
             window.titleVisibility = .hidden
             window.titlebarSeparatorStyle = .none
             window.setContentSize(NSSize(width: 700, height: 740))
-            window.contentMinSize = NSSize(width: 600, height: 520)
+            window.contentMinSize = Self.minimumSize
+            window.contentMaxSize = Self.maximumSize
+            // No full screen: the green button only zooms within the maximum size.
+            window.collectionBehavior = [.fullScreenNone]
+            hosting.sizingOptions = []
             window.isReleasedWhenClosed = false
             window.delegate = self
             // New name, so the larger frame saved by earlier versions is not restored.
@@ -199,5 +212,16 @@ final class DashboardWindowController: NSObject, NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+    }
+}
+
+/// Keeps the window title ("PowerBoard") out of the title bar, where the page title is shown instead.
+private struct HideWindowTitle: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *) {
+            content.toolbar(removing: .title)
+        } else {
+            content.navigationTitle("")
+        }
     }
 }

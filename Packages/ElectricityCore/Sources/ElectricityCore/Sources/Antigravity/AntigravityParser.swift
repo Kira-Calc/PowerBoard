@@ -82,10 +82,35 @@ public enum AntigravityParser {
     }
 
     static func readRecords(path: String, skipped: inout Int) throws -> [Record] {
+        do {
+            return try readRecords(databasePath: path, recordDatePath: path, readonly: true, skipped: &skipped)
+        } catch ParseError.notAConversationDatabase {
+            throw ParseError.notAConversationDatabase
+        } catch {
+            // A database in WAL mode without its -shm file cannot be opened read-only (SQLite error 14), which is how
+            // `agy` leaves conversations between runs. Read a private copy instead; the original is never written.
+            return try readCopy(of: path, skipped: &skipped)
+        }
+    }
+
+    private static func readCopy(of path: String, skipped: inout Int) throws -> [Record] {
+        let fileManager = FileManager.default
+        let folder = fileManager.temporaryDirectory.appendingPathComponent("antigravity-\(UUID().uuidString)", isDirectory: true)
+        try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? fileManager.removeItem(at: folder) }
+        let copy = folder.appendingPathComponent("conversation.db")
+        try fileManager.copyItem(atPath: path, toPath: copy.path)
+        if fileManager.fileExists(atPath: path + "-wal") {
+            try? fileManager.copyItem(atPath: path + "-wal", toPath: copy.path + "-wal")
+        }
+        return try readRecords(databasePath: copy.path, recordDatePath: path, readonly: false, skipped: &skipped)
+    }
+
+    private static func readRecords(databasePath: String, recordDatePath: String, readonly: Bool, skipped: inout Int) throws -> [Record] {
         var configuration = Configuration()
-        configuration.readonly = true
-        let queue = try DatabaseQueue(path: path, configuration: configuration)
-        let fileDate = (try? FileManager.default.attributesOfItem(atPath: path)[.modificationDate] as? Date) ?? Date()
+        configuration.readonly = readonly
+        let queue = try DatabaseQueue(path: databasePath, configuration: configuration)
+        let fileDate = (try? FileManager.default.attributesOfItem(atPath: recordDatePath)[.modificationDate] as? Date) ?? Date()
 
         return try queue.read { db -> [Record] in
             guard try db.tableExists("gen_metadata") else { throw ParseError.notAConversationDatabase }

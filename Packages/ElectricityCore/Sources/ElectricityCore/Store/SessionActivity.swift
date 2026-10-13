@@ -53,6 +53,20 @@ extension UsageStore {
         }
     }
 
+    /// Client of each session ("CLI", "Desktop", "VS Code", …), for the sessions that have one.
+    public func sessionClients(_ sessionIDs: [String]) throws -> [String: String] {
+        guard !sessionIDs.isEmpty else { return [:] }
+        return try read { db in
+            let placeholders = Array(repeating: "?", count: sessionIDs.count).joined(separator: ",")
+            var result: [String: String] = [:]
+            for row in try Row.fetchAll(db, sql: "SELECT session_id, MAX(client) FROM usage_event WHERE session_id IN (\(placeholders)) AND client IS NOT NULL GROUP BY session_id",
+                                        arguments: StatementArguments(sessionIDs)) {
+                result[row[0]] = row[1]
+            }
+            return result
+        }
+    }
+
     /// Mid energy (Wh) per session for the given IDs.
     public func sessionEnergy(_ sessionIDs: [String]) throws -> [String: Double] {
         guard !sessionIDs.isEmpty else { return [:] }

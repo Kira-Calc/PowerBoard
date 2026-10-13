@@ -12,7 +12,7 @@ struct ActiveSessionsList: View {
         VStack(spacing: compact ? 2 : 4) {
             ForEach(sessions) { session in
                 ActiveSessionRow(session: session, settings: settings, compact: compact) {
-                    TerminalJumper.jump(to: session.pid)
+                    TerminalJumper.jump(to: session)
                     onJump?()
                 }
             }
@@ -41,7 +41,7 @@ private struct ActiveSessionRow: View {
                         if session.title != nil && !compact {
                             Text(Formatting.projectName(session.projectPath))
                         }
-                        Text(SourceText.name(session.source))
+                        Text(SourceText.name(session.source, client: session.client))
                         statusText
                     }
                     .font(.caption)

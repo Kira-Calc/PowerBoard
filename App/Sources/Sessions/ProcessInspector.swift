@@ -87,12 +87,24 @@ enum ProcessInspector {
         return paths
     }
 
+    /// Current working directory of a process.
+    static func workingDirectory(_ pid: pid_t) -> String? {
+        var info = proc_vnodepathinfo()
+        let size = Int32(MemoryLayout<proc_vnodepathinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDVNODEPATHINFO, 0, &info, size) == size else { return nil }
+        let path = withUnsafeBytes(of: info.pvi_cdir.vip_path) { raw in String(decoding: raw.prefix { $0 != 0 }, as: UTF8.self) }
+        return path.isEmpty ? nil : path
+    }
+
     /// The nearest ancestor that is a regular app with a Dock icon (a terminal, an editor or a desktop app).
+    /// Helper apps inside another app's bundle (such as Codex (Service).app inside ChatGPT.app) are skipped:
+    /// bringing them forward shows nothing.
     @MainActor
     static func owningApp(of pid: pid_t) -> NSRunningApplication? {
         var current = pid
         for _ in 0..<32 {
-            if let app = NSRunningApplication(processIdentifier: current), app.activationPolicy == .regular {
+            if let app = NSRunningApplication(processIdentifier: current), app.activationPolicy == .regular,
+               !(app.bundleURL?.path.contains(".app/Contents/") ?? false) {
                 return app
             }
             guard let parent = parent(of: current), parent > 1, parent != current else { return nil }
@@ -111,6 +123,29 @@ enum TerminalJumper {
     static func describe(pid: pid_t) -> String {
         let app = ProcessInspector.owningApp(of: pid)
         return "pid \(pid) app \(app?.bundleIdentifier ?? "none") tty \(ProcessInspector.info(pid)?.tty ?? "none")"
+    }
+
+    /// Brings a session forward: its desktop app when it has one, otherwise the terminal or app that runs its process.
+    @MainActor
+    static func jump(to session: ActiveSession) {
+        jump(to: session.pid, app: session.appBundleID)
+    }
+
+    /// Brings `app` forward when given (opening it if needed), otherwise the terminal or app running `pid`.
+    @MainActor
+    static func jump(to pid: pid_t, app bundleID: String?) {
+        if let bundleID, let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first {
+            logger.info("Jump to app \(bundleID, privacy: .public)")
+            NSApp.yieldActivation(to: app)
+            app.activate()
+            return
+        }
+        if let bundleID, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+            return
+        }
+        guard pid > 0 else { return }
+        jump(to: pid)
     }
 
     @MainActor

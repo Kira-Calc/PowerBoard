@@ -24,12 +24,20 @@ struct ActiveSession: Identifiable, Hashable, Sendable {
     var statusSince: Date?
     var pid: pid_t
     var energyWh: Double
+    /// Client within the tool ("CLI", "Desktop", "Code", …), when known.
+    var client: String? = nil
+    /// For sessions in a desktop app without a terminal: the app to bring forward when the row is clicked.
+    var appBundleID: String? = nil
 }
 
 /// Finds running agent conversations every 2 seconds and reports turns that finish.
 ///
 /// Claude Code: `~/.claude/sessions/<pid>.json` gives the session and its busy or idle state.
-/// Codex: the task state comes from its log; a session is live while a `codex` process keeps its log file open.
+/// Claude Desktop: the Code tab's session index gives recent sessions; a log written in the last 30 seconds means
+/// the agent is working.
+/// Codex: the task state comes from its log; a session is live while a `codex` process keeps its log file open, or,
+/// for the desktop app and VS Code, while its latest task is recent.
+/// Antigravity (`agy`): a running process with a conversation database open.
 @MainActor
 final class ActiveSessionMonitor {
     private static let interval: Duration = .seconds(2)
@@ -101,7 +109,31 @@ final class ActiveSessionMonitor {
                                           title: titles.title(for: live.sessionID), status: status, statusSince: live.statusChangedAt, pid: live.pid, energyWh: 0))
         }
 
-        if let store, let activities = try? store.activities(since: Date().addingTimeInterval(-7 * 24 * 3600)),
+        // Claude Code processes started by the Claude desktop app belong to Claude Desktop and are brought forward
+        // through the app, not a terminal.
+        for index in sessions.indices where sessions[index].source == .claudeCode {
+            if let path = ProcessInspector.executablePath(sessions[index].pid), Self.isClaudeDesktopBinary(path) {
+                sessions[index].source = .claudeDesktop
+                sessions[index].client = UsageClient.desktopCode
+                sessions[index].appBundleID = ClaudeDesktopSession.appBundleID
+            }
+        }
+
+        // Claude desktop app, Code tab: sessions active in the last 30 minutes.
+        let now = Date()
+        let known = Set(sessions.map(\.sessionID))
+        for desktop in ClaudeDesktopSession.read() where !desktop.isArchived && !known.contains(desktop.sessionID) {
+            let logDate = Self.claudeLogDate(sessionID: desktop.sessionID)
+            let last = [desktop.lastActivityAt, logDate].compactMap { $0 }.max()
+            guard let last, now.timeIntervalSince(last) < 30 * 60 else { continue }
+            let running = logDate.map { now.timeIntervalSince($0) < 30 } ?? false
+            sessions.append(ActiveSession(sessionID: desktop.sessionID, source: .claudeDesktop, projectPath: desktop.cwd,
+                                          title: desktop.title ?? titles.title(for: desktop.sessionID),
+                                          status: running ? .running : .done, statusSince: last, pid: 0, energyWh: 0,
+                                          client: UsageClient.desktopCode, appBundleID: ClaudeDesktopSession.appBundleID))
+        }
+
+        if let store, let activities = try? store.activities(since: now.addingTimeInterval(-7 * 24 * 3600)),
            !activities.isEmpty {
             // Map open log files to the codex process that holds them.
             var owner: [String: pid_t] = [:]
@@ -111,11 +143,35 @@ final class ActiveSessionMonitor {
                     owner[URL(fileURLWithPath: path).resolvingSymlinksInPath().path] = pid
                 }
             }
-            for activity in activities where activity.source == .codex {
-                guard let pid = owner[activity.logPath] else { continue }
-                sessions.append(ActiveSession(sessionID: activity.sessionID, source: .codex, projectPath: activity.projectPath,
-                                              title: nil, status: activity.running ? .running : .done, statusSince: activity.eventAt,
-                                              pid: pid, energyWh: 0))
+            let codex = activities.filter { $0.source == .codex }
+            let clients = (try? store.sessionClients(codex.map(\.sessionID))) ?? [:]
+            for activity in codex {
+                let client = clients[activity.sessionID]
+                let app = client.flatMap { Self.appBundleID(codexClient: $0) }
+                if let pid = owner[activity.logPath] {
+                    sessions.append(ActiveSession(sessionID: activity.sessionID, source: .codex, projectPath: activity.projectPath,
+                                                  title: nil, status: activity.running ? .running : .done, statusSince: activity.eventAt,
+                                                  pid: pid, energyWh: 0, client: client, appBundleID: app))
+                } else if let app, activity.running || now.timeIntervalSince(activity.eventAt) < 30 * 60 {
+                    // The desktop app and VS Code may not keep the log open between turns.
+                    sessions.append(ActiveSession(sessionID: activity.sessionID, source: .codex, projectPath: activity.projectPath,
+                                                  title: nil, status: activity.running ? .running : .done, statusSince: activity.eventAt,
+                                                  pid: 0, energyWh: 0, client: client, appBundleID: app))
+                }
+            }
+        }
+
+        // Antigravity CLI (`agy`): a running process and the conversation database it has open.
+        for pid in ProcessInspector.allPIDs() where ProcessInspector.runs(pid, tool: "agy") {
+            for path in ProcessInspector.openFiles(pid) where path.contains("/conversations/") && path.hasSuffix(".db") {
+                let url = URL(fileURLWithPath: path)
+                let sessionID = url.deletingPathExtension().lastPathComponent
+                guard !sessions.contains(where: { $0.sessionID == sessionID }) else { continue }
+                let changed = [path, path + "-wal"].compactMap { (try? FileManager.default.attributesOfItem(atPath: $0))?[.modificationDate] as? Date }.max()
+                let running = changed.map { now.timeIntervalSince($0) < 15 } ?? false
+                sessions.append(ActiveSession(sessionID: sessionID, source: .antigravity, projectPath: ProcessInspector.workingDirectory(pid),
+                                              title: nil, status: running ? .running : .done, statusSince: changed, pid: pid, energyWh: 0,
+                                              client: UsageClient.cli))
             }
         }
 
@@ -134,6 +190,31 @@ final class ActiveSessionMonitor {
             (rank($0.status), -($0.statusSince?.timeIntervalSince1970 ?? 0)) < (rank($1.status), -($1.statusSince?.timeIntervalSince1970 ?? 0))
         }
     }
+
+    /// The Claude desktop app runs its own copy of Claude Code from inside its support folder or app bundle.
+    nonisolated static func isClaudeDesktopBinary(_ path: String) -> Bool {
+        path.contains("/Application Support/Claude/claude-code") || path.contains("/Claude.app/")
+    }
+
+    /// Codex desktop runs inside the ChatGPT app; the VS Code extension inside VS Code.
+    nonisolated static func appBundleID(codexClient client: String) -> String? {
+        switch client {
+        case UsageClient.desktop: "com.openai.codex"
+        case UsageClient.vscode: "com.microsoft.VSCode"
+        default: nil
+        }
+    }
+
+    /// Modification time of a Claude Code log, `~/.claude/projects/*/<session>.jsonl`.
+    nonisolated static func claudeLogDate(sessionID: String) -> Date? {
+        let projects = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/projects")
+        guard let folders = try? FileManager.default.contentsOfDirectory(at: projects, includingPropertiesForKeys: nil) else { return nil }
+        for folder in folders {
+            let file = folder.appendingPathComponent(sessionID + ".jsonl")
+            if let date = (try? FileManager.default.attributesOfItem(atPath: file.path))?[.modificationDate] as? Date { return date }
+        }
+        return nil
+    }
 }
 
 struct CompletionAlert: Equatable {
@@ -145,16 +226,19 @@ struct CompletionAlert: Equatable {
 enum CompletionNotifier {
     static let category = "conversation.finished"
     static let pidKey = "pid"
+    static let appKey = "app"
 
     @MainActor
     static func post(_ session: ActiveSession) {
         let content = UNMutableNotificationContent()
         content.title = String(localized: "notification.finished.title")
-        let place = "\(Formatting.projectName(session.projectPath)), \(SourceText.name(session.source))"
+        let place = "\(Formatting.projectName(session.projectPath)), \(SourceText.name(session.source, client: session.client))"
         content.body = session.title.map { "\($0)\n\(place)" } ?? place
         content.sound = .default
         content.categoryIdentifier = category
-        content.userInfo = [pidKey: Int(session.pid)]
+        var info: [String: Any] = [pidKey: Int(session.pid)]
+        if let bundleID = session.appBundleID { info[appKey] = bundleID }
+        content.userInfo = info
         let request = UNNotificationRequest(identifier: "finished-\(session.sessionID)-\(Date().timeIntervalSince1970)", content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
     }

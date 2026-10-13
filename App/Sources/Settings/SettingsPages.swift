@@ -180,7 +180,6 @@ struct SourcesSettingsPage: View {
             .sorted { $0.value > $1.value }.map(\.key)
         let records = (clientCounts[source] ?? [:]).values.reduce(0, +)
         return HStack(spacing: 10) {
-            IconBadge(Icons.terminalWindow, color: Palette.source(source), size: 22)
             VStack(alignment: .leading, spacing: 1) {
                 Text(verbatim: SourceText.name(source))
                 if !clients.isEmpty {
@@ -271,10 +270,7 @@ struct SourcesSettingsPage: View {
                 }
             }
         } header: {
-            HStack(spacing: 8) {
-                IconBadge(Icons.terminalWindow, color: Palette.source(source), size: 20)
-                Text(SourceText.name(source))
-            }
+            Text(SourceText.name(source))
         }
     }
 

@@ -113,8 +113,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     /// Clicking a "conversation finished" notification opens that conversation.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        guard let pid = response.notification.request.content.userInfo[CompletionNotifier.pidKey] as? Int else { return }
-        await MainActor.run { TerminalJumper.jump(to: pid_t(pid)) }
+        let info = response.notification.request.content.userInfo
+        let pid = info[CompletionNotifier.pidKey] as? Int ?? 0
+        let app = info[CompletionNotifier.appKey] as? String
+        await MainActor.run { TerminalJumper.jump(to: pid_t(pid), app: app) }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

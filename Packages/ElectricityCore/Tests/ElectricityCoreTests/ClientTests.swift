@@ -79,3 +79,14 @@ import Testing
         #expect(try store.clientCounts()[.claudeDesktop]?["Cowork"] == 1)
     }
 }
+
+@Suite struct ClaudeDesktopSessionTests {
+    @Test func parsesIndexFields() {
+        let json = #"{"sessionId": "local_x", "cliSessionId": "abc", "cwd": "/tmp/example", "title": "Fix the build", "lastActivityAt": 1791802800000, "isArchived": false, "model": "claude-sonnet-test"}"#
+        let session = ClaudeDesktopSession.parse(Data(json.utf8))
+        #expect(session?.sessionID == "abc")
+        #expect(session?.title == "Fix the build")
+        #expect(session?.lastActivityAt == Date(timeIntervalSince1970: 1_791_802_800))
+        #expect(ClaudeDesktopSession.parse(Data(#"{"sessionId": "local_y"}"#.utf8)) == nil)
+    }
+}

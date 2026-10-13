@@ -700,3 +700,24 @@ Codex 部分 ccusage 的合计比本应用高约 9%，差值和分叉会话继�
    - 页面内容的顶部边距减小，因为标题已经移到标题栏。
 5. **与上一期相比**：变化超过 10 倍或不到 1/10 时，显示"超过 10 倍"或"不到 1/10"，不再显示 +1236767% 这样的数字（`ReportStrings.change`，报告页和 Markdown 导出共用）。
 6. **文案**：方法说明页、README 和 METHODOLOGY 加入 Claude Desktop 和 Codex 的来源标注；"不包括"一项改为 claude.ai 网页版、Claude 桌面版和 ChatGPT 的普通聊天。
+
+### 活跃对话覆盖桌面版和 agy、跳转修复、窗口尺寸限制（用户反馈，2026-10-13）
+
+1. **Antigravity CLI（`agy`）读不到数据**：`agy` 退出后，会话数据库仍处于 WAL 模式，但旁边没有 `-shm` 文件。这种情况下 SQLite 无法以只读方式打开（错误 14），解析失败，所以显示 0 条记录。现在只读打开失败时，会把数据库和 `-wal` 复制到临时目录再读，读完删除副本，原文件不受影响。本机读到 1 条记录（之前是 0）。
+2. **活跃对话**：
+   - **Claude 桌面版 Code 标签页**：
+     - 读取 `claude-code-sessions/**/local_*.json`，只取 `cliSessionId`、`title`、`cwd`、`lastActivityAt` 和 `isArchived`（`ClaudeDesktopSession`）。30 分钟内活跃的会话会显示出来；对应的日志在 30 秒内有写入，就视为"运行中"。
+     - 由桌面版启动的 Claude Code 进程（可执行文件位于 `Application Support/Claude/claude-code` 或 `Claude.app` 内），也归为 Claude Desktop。
+   - **Codex 桌面版和 VS Code**：原来只有当某个 `codex` 进程打开着日志时才会显示。现在如果会话的客户端是 Desktop 或 VS Code，并且最近一次任务在 30 分钟内，即使找不到这样的进程也会显示。
+   - **`agy`**：找到可执行文件路径包含 `/agy` 的进程，从它打开的 `conversations/<id>.db` 得到会话 ID；数据库或 WAL 在 15 秒内有写入就视为"运行中"；工作目录通过 `PROC_PIDVNODEPATHINFO` 获取。`presence/*.lock` 是空的文件锁，里面没有进程号，所以不用它。
+   - 会话行显示"工具 · 客户端"，例如"Codex · Desktop"。
+3. **跳转修复**：
+   - 原因：ChatGPT.app（bundle ID 为 `com.openai.codex`，Codex 桌面版就在它里面）和 Claude.app 都通过嵌在自己包内的辅助 App 运行任务，例如 `Codex (Service).app` 和 `Claude Helper.app`。原来沿父进程向上查找时，先找到的是这些辅助 App，把它们调到前台看不到任何窗口。
+   - 修复：查找时跳过位于其他 App 包内的辅助 App。桌面版会话直接带上要打开的 App 的 bundle ID（`appBundleID`），点击时把它调到前台，App 没有运行时就启动它。
+   - "对话已完成"通知里也带上 bundle ID，点击通知时同样能打开桌面版。
+4. **窗口尺寸**：
+   - 内容区最小 600 × 520，最大 1100 × 1300。最小值同时设置在窗口（`contentMinSize`）和 SwiftUI 根视图（`.frame(minWidth:...)`）上，并设置 `hosting.sizingOptions = []`。原来 SwiftUI 的尺寸约束覆盖了窗口的最小值，窗口可以被拖得很窄，侧边栏会折叠并出现 `>>` 按钮。
+   - 不能全屏（`collectionBehavior = [.fullScreenNone]`），绿色按钮只做缩放。
+   - 去掉侧边栏折叠按钮；窗口标题从标题栏中移除（macOS 15 及以上用 `.toolbar(removing: .title)`，macOS 14 用空的 `navigationTitle`）。
+   - 已验证：把窗口强行设为 300 宽会停在 600；全屏按钮不存在。
+5. **集成页**：按用户要求，去掉所有工具名称旁边的图标（列表行和各工具小节的标题），只保留文字。

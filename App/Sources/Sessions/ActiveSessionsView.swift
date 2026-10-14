@@ -96,24 +96,26 @@ private struct ActiveSessionRow: View {
 
 /// A plain dot when the turn has finished (green) or waits for the user (orange), and a spinning ring, like a page
 /// loading indicator, while the agent works. No glow or pulse. With Reduce Motion the ring does not spin.
+///
+/// The angle comes from the clock, not from a repeating animation: a repeating animation started in `onAppear` stopped
+/// when the same row went from finished back to running (its state already said "spinning") or when the row was
+/// redrawn inside another animation.
 struct StatusLight: View {
     let status: ActiveSession.Status
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var spinning = false
 
     var body: some View {
         Group {
             switch status {
             case .running:
-                Circle()
-                    .trim(from: 0, to: 0.72)
-                    .stroke(Color.secondary, style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
-                    .frame(width: 10, height: 10)
-                    .rotationEffect(.degrees(spinning ? 360 : 0))
-                    .onAppear {
-                        guard !reduceMotion else { return }
-                        withAnimation(.linear(duration: 0.9).repeatForever(autoreverses: false)) { spinning = true }
-                    }
+                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
+                    let turn = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 0.9) / 0.9
+                    Circle()
+                        .trim(from: 0, to: 0.72)
+                        .stroke(Color.secondary, style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
+                        .frame(width: 10, height: 10)
+                        .rotationEffect(.degrees(reduceMotion ? 0 : turn * 360))
+                }
             case .done:
                 Circle().fill(Palette.clean).frame(width: 8, height: 8)
             case .waiting:

@@ -28,6 +28,8 @@ struct ActiveSession: Identifiable, Hashable, Sendable {
     var client: String? = nil
     /// For sessions in a desktop app without a terminal: the app to bring forward when the row is clicked.
     var appBundleID: String? = nil
+    /// Claude Desktop chat: a reply was seen, so "finished" applies; otherwise the app was only used.
+    var chatReplied = false
 }
 
 /// Finds running agent conversations every 2 seconds and reports turns that finish.
@@ -38,7 +40,7 @@ struct ActiveSession: Identifiable, Hashable, Sendable {
 /// Codex: the task state comes from its log; a session is live while a `codex` process keeps its log file open, or,
 /// for the desktop app and VS Code, while its latest task is recent.
 /// Antigravity (`agy`): a running process with a conversation database open.
-/// Claude Desktop chat: inferred from the app being used, see `ClaudeChatProbe`.
+/// Claude Desktop chat: the app being used, and its Stop button while it replies; see `ClaudeChatProbe`.
 @MainActor
 final class ActiveSessionMonitor {
     private static let interval: Duration = .seconds(2)
@@ -82,8 +84,7 @@ final class ActiveSessionMonitor {
         let chat = self.chat
         let claudeApp = claudeAppState()
         let sessions = await Task.detached { Self.collect(store: store, titles: titles, chat: chat, claudeApp: claudeApp) }.value
-        // The chat row is a guess, so it never raises a completion alert.
-        let finished = sessions.filter { previous[$0.sessionID] == .running && $0.status == .done && !$0.isClaudeChat }
+        let finished = sessions.filter { previous[$0.sessionID] == .running && $0.status == .done }
         previous = Dictionary(uniqueKeysWithValues: sessions.map { ($0.sessionID, $0.status) })
         // Completion alerts above use every session; the list shows only the recent ones.
         let shown = Self.shown(sessions, now: Date())
@@ -234,7 +235,7 @@ final class ActiveSessionMonitor {
             sessions[index].title = codexTitles[sessions[index].sessionID]
         }
 
-        // Claude Desktop chat, after the Code tab and Cowork so their work is not taken for a chat reply.
+        // Claude Desktop chat, after the Code tab and Cowork so their Stop button is not taken for a chat reply.
         let desktopWorking = sessions.contains { $0.source == .claudeDesktop && $0.status == .running }
         if let chat, let row = chat.session(app: claudeApp, otherWorkRunning: desktopWorking, now: now) {
             sessions.append(row)

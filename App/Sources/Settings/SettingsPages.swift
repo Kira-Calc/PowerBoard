@@ -120,6 +120,7 @@ struct SourcesSettingsPage: View {
             } footer: {
                 Text("sources.integrations.footer").font(.caption).foregroundStyle(.secondary)
             }
+            ClaudeChatAccessSection()
             ForEach(context.model.usedSources, id: \.self) { source in
                 sourceSection(source)
             }
@@ -292,6 +293,39 @@ struct SourcesSettingsPage: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         context.settings.addCustomPath(url.path, for: source)
         context.coordinator.applySourcePaths()
+    }
+}
+
+/// Accessibility permission for the reply state of Claude Desktop chat (see `ClaudeChatProbe`).
+private struct ClaudeChatAccessSection: View {
+    var body: some View {
+        Section {
+            // Checked again every few seconds, so the row updates after the user allows access in System Settings.
+            TimelineView(.periodic(from: .now, by: 3)) { _ in
+                HStack {
+                    Text("sources.chatAccess")
+                    Spacer()
+                    if AXIsProcessTrusted() {
+                        HStack(spacing: 4) {
+                            SymbolIcon(Icons.checkmarkSeal, size: 13).foregroundStyle(Palette.clean)
+                            Text("sources.chatAccess.granted").foregroundStyle(.secondary)
+                        }
+                        .font(.callout)
+                    } else {
+                        Button("sources.chatAccess.grant") {
+                            // The value of `kAXTrustedCheckOptionPrompt`, which Swift 6 does not allow to read as a global.
+                            let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+                            if !AXIsProcessTrustedWithOptions(options),
+                               let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                    }
+                }
+            }
+        } footer: {
+            Text("sources.chatAccess.footer").font(.caption).foregroundStyle(.secondary)
+        }
     }
 }
 

@@ -80,8 +80,8 @@ private struct ActiveSessionRow: View {
     @ViewBuilder
     private var statusText: some View {
         let key: String = switch session.status {
-        case .running: session.isClaudeChat ? "sessions.chat.receiving" : "sessions.status.running"
-        case .done: session.isClaudeChat ? "sessions.chat.used" : "sessions.status.done"
+        case .running: session.isClaudeChat ? "sessions.chat.replying" : "sessions.status.running"
+        case .done: session.isClaudeChat && !session.chatReplied ? "sessions.chat.used" : "sessions.status.done"
         case .waiting: "sessions.status.waiting"
         }
         if let since = session.statusSince {

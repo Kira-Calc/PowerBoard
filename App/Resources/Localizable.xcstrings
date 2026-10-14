@@ -7903,36 +7903,36 @@
         }
       }
     },
-    "sessions.chat.receiving": {
+    "sessions.chat.replying": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Possibly receiving a reply"
+            "value": "Replying"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "可能在接收回复"
+            "value": "正在回复"
           }
         }
       }
     },
-    "sessions.chat.receiving.since": {
+    "sessions.chat.replying.since": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Possibly receiving a reply, since %@"
+            "value": "Replying, started %@"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "可能在接收回复，%@开始"
+            "value": "正在回复，%@开始"
           }
         }
       }
@@ -7994,13 +7994,81 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Inferred from whether the Claude desktop app is frontmost and has network activity. Chat content is not read."
+            "value": "Based on whether the Claude desktop app is frontmost and whether its window shows a Stop button. Chat content is not read."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "根据 Claude 桌面版是否在前台、是否有网络活动推测，不读取聊天内容"
+            "value": "根据 Claude 桌面版是否在前台、窗口里是否有“停止”按钮判断，不读取聊天内容"
+          }
+        }
+      }
+    },
+    "sources.chatAccess": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reply state of Claude Desktop chat"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claude 桌面版聊天的回复状态"
+          }
+        }
+      }
+    },
+    "sources.chatAccess.granted": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allowed"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已允许"
+          }
+        }
+      }
+    },
+    "sources.chatAccess.grant": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "允许…"
+          }
+        }
+      }
+    },
+    "sources.chatAccess.footer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chat keeps no usage records on this Mac, so it only appears in Active conversations. With Accessibility permission, PowerBoard checks whether the desktop app’s window shows a Stop button to tell that a reply is being written. Only button labels are compared; chat content is not read. Without it, the row only says the app was used recently."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "普通聊天不在本机记录用量，只能在活跃对话里显示状态。有辅助功能权限时，PowerBoard 查看桌面版窗口里有没有“停止”按钮来判断是否正在回复，只比对按钮名称，不读取聊天内容；没有权限时只显示最近用过。"
           }
         }
       }

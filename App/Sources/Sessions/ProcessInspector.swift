@@ -60,35 +60,6 @@ enum ProcessInspector {
         return info.kp_eproc.e_ppid
     }
 
-    /// Command-line arguments, without the executable path, through `KERN_PROCARGS2`.
-    static func arguments(_ pid: pid_t) -> [String] {
-        var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
-        var size = 0
-        guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > MemoryLayout<Int32>.size else { return [] }
-        var buffer = [UInt8](repeating: 0, count: size)
-        guard sysctl(&mib, 3, &buffer, &size, nil, 0) == 0 else { return [] }
-        let count = buffer.withUnsafeBytes { Int($0.load(as: Int32.self)) }
-        // argc, the executable path, padding zeros, then the arguments separated by zeros.
-        var fields = buffer.prefix(size).dropFirst(MemoryLayout<Int32>.size).split(separator: 0, omittingEmptySubsequences: true)
-            .map { String(decoding: $0, as: UTF8.self) }
-        guard !fields.isEmpty else { return [] }
-        fields.removeFirst()
-        return Array(fields.prefix(max(count - 1, 0)))
-    }
-
-    /// CPU time used so far (user plus system), in nanoseconds.
-    static func cpuTime(_ pid: pid_t) -> UInt64? {
-        var usage = rusage_info_v4()
-        let result = withUnsafeMutablePointer(to: &usage) {
-            $0.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) { proc_pid_rusage(pid, RUSAGE_INFO_V4, $0) }
-        }
-        guard result == 0 else { return nil }
-        // The times are in Mach ticks.
-        var timebase = mach_timebase_info_data_t()
-        mach_timebase_info(&timebase)
-        return (usage.ri_user_time + usage.ri_system_time) * UInt64(timebase.numer) / UInt64(max(timebase.denom, 1))
-    }
-
     static func isAlive(_ pid: pid_t) -> Bool {
         kill(pid, 0) == 0 || errno == EPERM
     }

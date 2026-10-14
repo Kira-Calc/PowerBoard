@@ -32,7 +32,8 @@ private struct ActiveSessionRow: View {
             HStack(spacing: 10) {
                 StatusLight(status: session.status)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(session.title ?? Formatting.projectName(session.projectPath))
+                    Text(session.isClaudeChat ? String(localized: "sessions.chat.title")
+                         : session.title ?? Formatting.projectName(session.projectPath))
                         .font(compact ? .callout.weight(.medium) : .body.weight(.medium))
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -49,9 +50,17 @@ private struct ActiveSessionRow: View {
                     .lineLimit(1)
                 }
                 Spacer(minLength: 8)
-                RollingText(settings.formatEnergy(session.energyWh).text)
-                    .font(compact ? .callout : .body)
-                    .foregroundStyle(.secondary)
+                if session.isClaudeChat {
+                    // The chat keeps no usage records on this Mac.
+                    Text(verbatim: "–")
+                        .font(compact ? .callout : .body)
+                        .foregroundStyle(.secondary)
+                        .help(Text("sessions.chat.noEnergy"))
+                } else {
+                    RollingText(settings.formatEnergy(session.energyWh).text)
+                        .font(compact ? .callout : .body)
+                        .foregroundStyle(.secondary)
+                }
                 SymbolIcon(Icon("arrow.up.forward.app"), size: 13)
                     .foregroundStyle(.tertiary)
                     .opacity(hovering ? 1 : 0.5)
@@ -63,7 +72,7 @@ private struct ActiveSessionRow: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help(session.projectPath ?? "")
+        .help(session.isClaudeChat ? String(localized: "sessions.chat.help") : session.projectPath ?? "")
         .accessibilityElement(children: .combine)
         .accessibilityHint(Text("sessions.jump"))
     }
@@ -71,8 +80,8 @@ private struct ActiveSessionRow: View {
     @ViewBuilder
     private var statusText: some View {
         let key: String = switch session.status {
-        case .running: "sessions.status.running"
-        case .done: "sessions.status.done"
+        case .running: session.isClaudeChat ? "sessions.chat.receiving" : "sessions.status.running"
+        case .done: session.isClaudeChat ? "sessions.chat.used" : "sessions.status.done"
         case .waiting: "sessions.status.waiting"
         }
         if let since = session.statusSince {

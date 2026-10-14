@@ -38,6 +38,7 @@ struct ActiveSession: Identifiable, Hashable, Sendable {
 /// Codex: the task state comes from its log; a session is live while a `codex` process keeps its log file open, or,
 /// for the desktop app and VS Code, while its latest task is recent.
 /// Antigravity (`agy`): a running process with a conversation database open.
+/// Claude Desktop chat: inferred from the app being used, see `ClaudeChatProbe`.
 @MainActor
 final class ActiveSessionMonitor {
     private static let interval: Duration = .seconds(2)
@@ -53,6 +54,8 @@ final class ActiveSessionMonitor {
     private var task: Task<Void, Never>?
     private var alertReset: Task<Void, Never>?
     private var previous: [String: ActiveSession.Status] = [:]
+    private let chat = ClaudeChatProbe()
+    private var claudeLastFrontmost: Date?
 
     init(model: AppModel, settings: AppSettings) {
         self.model = model
@@ -76,8 +79,11 @@ final class ActiveSessionMonitor {
     private func refresh() async {
         let store = model.store
         let titles = self.titles
-        let sessions = await Task.detached { Self.collect(store: store, titles: titles) }.value
-        let finished = sessions.filter { previous[$0.sessionID] == .running && $0.status == .done }
+        let chat = self.chat
+        let claudeApp = claudeAppState()
+        let sessions = await Task.detached { Self.collect(store: store, titles: titles, chat: chat, claudeApp: claudeApp) }.value
+        // The chat row is a guess, so it never raises a completion alert.
+        let finished = sessions.filter { previous[$0.sessionID] == .running && $0.status == .done && !$0.isClaudeChat }
         previous = Dictionary(uniqueKeysWithValues: sessions.map { ($0.sessionID, $0.status) })
         // Completion alerts above use every session; the list shows only the recent ones.
         let shown = Self.shown(sessions, now: Date())
@@ -98,6 +104,18 @@ final class ActiveSessionMonitor {
         return Array(recent.prefix(maxShown))
     }
 
+    /// The Claude desktop app's process and when it was last frontmost, for the chat row.
+    private func claudeAppState() -> ClaudeChatProbe.AppState? {
+        guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: ClaudeDesktopSession.appBundleID).first,
+              !app.isTerminated else {
+            claudeLastFrontmost = nil
+            return nil
+        }
+        let frontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier
+        if frontmost { claudeLastFrontmost = Date() }
+        return ClaudeChatProbe.AppState(pid: app.processIdentifier, isFrontmost: frontmost, lastFrontmost: claudeLastFrontmost)
+    }
+
     private func showAlert(for session: ActiveSession) {
         model.completionAlert = CompletionAlert(session: session, at: Date())
         alertReset?.cancel()
@@ -111,7 +129,8 @@ final class ActiveSessionMonitor {
     private let titles = TitleCache()
 
     /// Runs off the main thread: reads session files, scans processes and queries energy.
-    nonisolated static func collect(store: UsageStore?, titles: TitleCache) -> [ActiveSession] {
+    nonisolated static func collect(store: UsageStore?, titles: TitleCache, chat: ClaudeChatProbe? = nil,
+                                    claudeApp: ClaudeChatProbe.AppState? = nil) -> [ActiveSession] {
         var sessions: [ActiveSession] = []
 
         for live in LiveClaudeSession.read(directory: LiveClaudeSession.standardDirectory)
@@ -213,6 +232,12 @@ final class ActiveSessionMonitor {
         let codexTitles = titles.codexTitles()
         for index in sessions.indices where sessions[index].source == .codex && sessions[index].title == nil {
             sessions[index].title = codexTitles[sessions[index].sessionID]
+        }
+
+        // Claude Desktop chat, after the Code tab and Cowork so their work is not taken for a chat reply.
+        let desktopWorking = sessions.contains { $0.source == .claudeDesktop && $0.status == .running }
+        if let chat, let row = chat.session(app: claudeApp, otherWorkRunning: desktopWorking, now: now) {
+            sessions.append(row)
         }
 
         if let store, let energy = try? store.sessionEnergy(sessions.map(\.sessionID)) {

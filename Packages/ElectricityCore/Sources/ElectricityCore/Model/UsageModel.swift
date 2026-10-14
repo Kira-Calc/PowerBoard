@@ -43,6 +43,8 @@ public enum UsageClient {
     public static let cowork = "Cowork"
     /// The Code tab of the Claude desktop app.
     public static let desktopCode = "Code"
+    /// Ordinary chat in the Claude desktop app. It writes no usage records; only its activity is shown.
+    public static let chat = "Chat"
 
     /// Claude Code `entrypoint`: "cli", "sdk-ts", "claude-vscode", "local-agent" (Cowork), "claude-desktop" (Code tab), …
     public static func claude(entrypoint: String?) -> String? {

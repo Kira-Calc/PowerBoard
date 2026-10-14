@@ -178,3 +178,40 @@ public enum CodexParser {
         ))
     }
 }
+
+/// The state of the latest task in the end of a Codex log, for showing a session as running or finished as soon as
+/// the log changes, before the records reach the database.
+///
+/// Only the first bytes of each line are looked at: the line type and timestamp come before the payload, and a
+/// `task_complete` line also carries the last reply, which is not read.
+public enum CodexTaskState {
+    static let prefixLength = 200
+
+    /// Running or not, and when, from the last `task_started`, `task_complete` or `turn_aborted` line in `tail`.
+    /// `tail` may start in the middle of a line; that line is skipped. Nil when no task event is found.
+    public static func latest(inTail tail: Data) -> (running: Bool, at: Date?)? {
+        let lines = tail.split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: true)
+        for (index, line) in lines.enumerated().reversed() {
+            if index == 0 && tail.first != UInt8(ascii: "{") { continue }
+            let head = String(decoding: line.prefix(prefixLength), as: UTF8.self)
+            guard head.contains("\"type\":\"event_msg\"") else { continue }
+            let running: Bool
+            if head.contains("\"payload\":{\"type\":\"task_started\"") {
+                running = true
+            } else if head.contains("\"payload\":{\"type\":\"task_complete\"") || head.contains("\"payload\":{\"type\":\"turn_aborted\"") {
+                running = false
+            } else {
+                continue
+            }
+            return (running, timestamp(in: head))
+        }
+        return nil
+    }
+
+    /// The value of `"timestamp":"…"` at the start of a line.
+    private static func timestamp(in head: String) -> Date? {
+        guard let key = head.range(of: "\"timestamp\":\""),
+              let end = head[key.upperBound...].firstIndex(of: "\"") else { return nil }
+        return ParsingSupport.parseTimestamp(String(head[key.upperBound..<end]))
+    }
+}

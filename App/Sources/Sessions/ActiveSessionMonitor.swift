@@ -197,20 +197,26 @@ final class ActiveSessionMonitor {
             }
         }
 
-        // Codex logs written in the last 30 minutes, read straight from disk so a new or busy session shows up within
-        // seconds, before its records reach the database. Only the first line (session ID, originator, folder) is read.
+        // Codex logs written in the last 30 minutes, read straight from disk so a session starts or finishes within
+        // seconds, before its records reach the database. The first line gives the session ID, originator and folder;
+        // the latest task event at the end of the file says whether it is running. Without one, a write in the last
+        // 15 seconds counts as running.
         for recent in Self.recentCodexLogs(now: now) {
-            let running = now.timeIntervalSince(recent.modified) < 15
+            let running = recent.task?.running ?? (now.timeIntervalSince(recent.modified) < 15)
+            let since = recent.task?.at ?? recent.modified
             if let index = sessions.firstIndex(where: { $0.sessionID == recent.sessionID }) {
-                if running && sessions[index].status == .done {
-                    sessions[index].status = .running
-                    sessions[index].statusSince = recent.modified
+                let status: ActiveSession.Status = running ? .running : .done
+                if sessions[index].status != status && (recent.task != nil || running) {
+                    sessions[index].status = status
+                    sessions[index].statusSince = since
                 }
                 continue
             }
+            // CLI sessions are listed only while their process runs (above); here they only get their state.
+            guard !recent.isCLI else { continue }
             let client = UsageClient.codex(originator: recent.originator)
             sessions.append(ActiveSession(sessionID: recent.sessionID, source: .codex, projectPath: recent.cwd, title: nil,
-                                          status: running ? .running : .done, statusSince: recent.modified, pid: 0, energyWh: 0,
+                                          status: running ? .running : .done, statusSince: since, pid: 0, energyWh: 0,
                                           client: client, appBundleID: client.flatMap { Self.appBundleID(codexClient: $0) }))
         }
 
@@ -276,10 +282,16 @@ final class ActiveSessionMonitor {
         var originator: String?
         var cwd: String?
         var modified: Date
+        /// The latest task event at the end of the log, when there is one.
+        var task: (running: Bool, at: Date?)?
+        var isCLI: Bool
     }
 
+    /// How much of the end of a log is searched for the latest task event.
+    nonisolated static let codexTailLength = 256 * 1024
+
     /// Codex logs (`~/.codex/sessions/YYYY/MM/DD/*.jsonl`, today and yesterday) changed in the last 30 minutes.
-    /// Sessions whose originator is the CLI are left to the process check, which knows when they end.
+    /// Sessions whose originator is the CLI are marked: the process check decides whether they are listed.
     nonisolated static func recentCodexLogs(now: Date) -> [RecentCodexLog] {
         let root = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex/sessions")
         let calendar = Calendar.current
@@ -301,8 +313,13 @@ final class ActiveSessionMonitor {
                       let sessionID = (payload["id"] as? String) ?? (payload["session_id"] as? String)
                 else { continue }
                 let originator = payload["originator"] as? String
-                guard UsageClient.codex(originator: originator) != UsageClient.cli else { continue }
-                result.append(RecentCodexLog(sessionID: sessionID, originator: originator, cwd: payload["cwd"] as? String, modified: modified))
+                var task: (running: Bool, at: Date?)?
+                if let size = try? handle.seekToEnd() {
+                    try? handle.seek(toOffset: size > UInt64(codexTailLength) ? size - UInt64(codexTailLength) : 0)
+                    if let tail = try? handle.readToEnd() { task = CodexTaskState.latest(inTail: tail) }
+                }
+                result.append(RecentCodexLog(sessionID: sessionID, originator: originator, cwd: payload["cwd"] as? String, modified: modified,
+                                             task: task, isCLI: UsageClient.codex(originator: originator) == UsageClient.cli))
             }
         }
         return result

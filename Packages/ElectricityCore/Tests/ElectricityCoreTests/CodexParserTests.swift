@@ -105,3 +105,37 @@ import Testing
         #expect(CodexParser.parse(line: noTimestamp, filePath: path, lineNumber: 4, state: &state) == .skipped(.missingField))
     }
 }
+
+@Suite struct CodexTaskStateTests {
+    private func data(_ lines: [String]) -> Data { Data(lines.joined(separator: "\n").utf8) }
+
+    @Test func latestTaskEventWins() throws {
+        let tail = data([
+            #"{"timestamp":"2026-10-14T01:47:57.295Z","type":"event_msg","payload":{"type":"task_started","turn_id":"t"}}"#,
+            #"{"timestamp":"2026-10-14T01:50:00.000Z","type":"response_item","payload":{"type":"message"}}"#,
+            #"{"timestamp":"2026-10-14T02:07:36.417Z","type":"event_msg","payload":{"type":"task_complete","last_agent_message":"\#(String(repeating: "x", count: 10_000))"}}"#,
+            #"{"timestamp":"2026-10-14T02:07:37.000Z","type":"event_msg","payload":{"type":"token_count"}}"#,
+        ])
+        let state = try #require(CodexTaskState.latest(inTail: tail))
+        #expect(state.running == false)
+        #expect(abs((state.at?.timeIntervalSince1970 ?? 0) - 1_791_943_656.417) < 0.001)
+    }
+
+    @Test func startedAfterCompleteIsRunning() throws {
+        let tail = data([
+            #"{"timestamp":"2026-10-14T02:07:36.417Z","type":"event_msg","payload":{"type":"task_complete"}}"#,
+            #"{"timestamp":"2026-10-14T02:10:00.000Z","ordinal":5,"type":"event_msg","payload":{"type":"task_started"}}"#,
+        ])
+        #expect(try #require(CodexTaskState.latest(inTail: tail)).running)
+    }
+
+    @Test func abortedIsNotRunningAndPartialFirstLineIsSkipped() throws {
+        let tail = data([
+            #"type":"event_msg","payload":{"type":"task_started"}}"#,
+            #"{"timestamp":"2026-10-14T02:07:36.417Z","type":"event_msg","payload":{"type":"turn_aborted"}}"#,
+        ])
+        #expect(try #require(CodexTaskState.latest(inTail: tail)).running == false)
+        #expect(CodexTaskState.latest(inTail: data([#"type":"event_msg","payload":{"type":"task_started"}}"#])) == nil)
+        #expect(CodexTaskState.latest(inTail: Data()) == nil)
+    }
+}

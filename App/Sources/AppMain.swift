@@ -77,6 +77,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if let name = UserDefaults.standard.string(forKey: "openDashboard") {
             openDashboard(section: DashboardSection(rawValue: name) ?? .overview)
         }
+
+        // Development aid: `open <App> --args -testCompletionAlert YES` shows a completion alert 3 seconds after launch,
+        // to check the menu bar alert and the panel that opens and closes by itself.
+        if UserDefaults.standard.bool(forKey: "testCompletionAlert") {
+            Task { [model] in
+                try? await Task.sleep(for: .seconds(3))
+                let session = ActiveSession(sessionID: "test", source: .claudeCode, projectPath: "/tmp/test", title: "Test",
+                                            status: .done, statusSince: Date(), pid: 0, energyWh: 0)
+                model.completionAlert = CompletionAlert(session: session, at: Date())
+            }
+        }
     }
 
     /// Writes this week's report (or the last 7 days with `-exportTestRolling YES`) in every format and both languages.

@@ -19,6 +19,10 @@ final class StatusItemController: NSObject {
     private var items: [Slot: (item: NSStatusItem, host: LabelHostingView)] = [:]
     private let popover = NSPopover()
     private var lastAlertShown: Date?
+    /// Closes a panel that opened by itself for a finished turn.
+    private var autoClose: Task<Void, Never>?
+    /// How long a panel opened for a finished turn stays before it closes by itself.
+    private static let autoCloseDelay: Duration = .seconds(3)
 
     init(model: AppModel, settings: AppSettings, openDashboard: @escaping (DashboardSection?) -> Void) {
         self.model = model
@@ -91,6 +95,25 @@ final class StatusItemController: NSObject {
         guard settings.completionOpensPopover, !popover.isShown,
               let slot, let button = items[slot]?.item.button else { return }
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        scheduleAutoClose()
+    }
+
+    /// Closes the panel after `autoCloseDelay`, but not while the pointer is over it: then it waits until the pointer
+    /// leaves and closes one second later. Opening the panel by hand cancels this.
+    private func scheduleAutoClose() {
+        autoClose?.cancel()
+        autoClose = Task { [weak self] in
+            try? await Task.sleep(for: Self.autoCloseDelay)
+            while !Task.isCancelled {
+                guard let self, self.popover.isShown else { return }
+                if let frame = self.popover.contentViewController?.view.window?.frame, frame.contains(NSEvent.mouseLocation) {
+                    try? await Task.sleep(for: .seconds(1))
+                    continue
+                }
+                self.popover.performClose(nil)
+                return
+            }
+        }
     }
 
     private func update(_ slot: Slot, metrics: [MenuBarMetric], alert: Bool) {
@@ -148,6 +171,7 @@ final class StatusItemController: NSObject {
     }
 
     @objc private func togglePopover(_ sender: NSStatusBarButton) {
+        autoClose?.cancel()
         if popover.isShown {
             popover.performClose(sender)
         } else {

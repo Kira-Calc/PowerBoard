@@ -202,6 +202,12 @@ final class ActiveSessionMonitor {
         // the latest task event at the end of the file says whether it is running. Without one, a write in the last
         // 15 seconds counts as running.
         for recent in Self.recentCodexLogs(now: now) {
+            // Sub-agents (for example "Guardian review", which Codex Desktop starts by itself to check a command
+            // before it runs) belong to the conversation that started them and are not listed on their own.
+            if recent.isSubagent {
+                sessions.removeAll { $0.sessionID == recent.sessionID }
+                continue
+            }
             let running = recent.task?.running ?? (now.timeIntervalSince(recent.modified) < 15)
             let since = recent.task?.at ?? recent.modified
             if let index = sessions.firstIndex(where: { $0.sessionID == recent.sessionID }) {
@@ -285,6 +291,8 @@ final class ActiveSessionMonitor {
         /// The latest task event at the end of the log, when there is one.
         var task: (running: Bool, at: Date?)?
         var isCLI: Bool
+        /// Started by another session (`session_meta.source.subagent`), such as Codex's guardian review.
+        var isSubagent: Bool = false
     }
 
     /// How much of the end of a log is searched for the latest task event.
@@ -319,10 +327,17 @@ final class ActiveSessionMonitor {
                     if let tail = try? handle.readToEnd() { task = CodexTaskState.latest(inTail: tail) }
                 }
                 result.append(RecentCodexLog(sessionID: sessionID, originator: originator, cwd: payload["cwd"] as? String, modified: modified,
-                                             task: task, isCLI: UsageClient.codex(originator: originator) == UsageClient.cli))
+                                             task: task, isCLI: UsageClient.codex(originator: originator) == UsageClient.cli,
+                                             isSubagent: isSubagent(payload)))
             }
         }
         return result
+    }
+
+    /// `session_meta.source` is `{"subagent": …}` for sessions another session started. `parent_thread_id` is not
+    /// used: a conversation forked by the user may carry it too.
+    nonisolated static func isSubagent(_ payload: [String: Any]) -> Bool {
+        (payload["source"] as? [String: Any])?["subagent"] != nil
     }
 
     /// Modification time of a Claude Code log, `~/.claude/projects/*/<session>.jsonl`.

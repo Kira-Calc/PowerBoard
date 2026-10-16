@@ -903,3 +903,7 @@ Codex 部分 ccusage 的合计比本应用高约 9%，差值和分叉会话继�
 用户结束 Codex 任务后，活跃对话里没有及时变成“已完成”。数据库里的状态是对的，问题在直接看磁盘的快速通道：它把“日志 15 秒内有写入”当成运行中，而写入“任务完成”本身也是一次写入，所以结束后至少还会显示 15 秒运行中，而且会把数据库里已完成的状态改回运行中。
 
 改为读日志末尾 256 KB，找最后一条 `task_started` / `task_complete` / `turn_aborted`，以它为准，既能改成运行中，也能改回已完成；时间用这条记录的时间。只看每行前 200 字节里的类型和时间戳：`task_complete` 行里带有最后一条回复，不解析整行。找不到任务记录时才用 15 秒写入规则。命令行版的 Codex 也用这个结果更新状态，但是否列出仍由进程检查决定。逻辑在 Core 的 `CodexTaskState`，有 3 个测试。
+
+## 活跃对话：不列出 Codex 子代理（2026-10-16）
+
+用户看到一条叫 “Guardian review” 的 Codex 会话在对话进行中突然出现。它是 Codex 桌面版自己启动的子代理，在执行命令前做审查：`session_meta.source` 为 `{"subagent": {"other": "guardian"}}`，`thread_source` 为 `guardian_review`，并带 `parent_thread_id`。子代理属于发起它的对话，不单独列出：首行 `source` 含 `subagent` 的会话从活跃对话中去掉。不用 `parent_thread_id` 判断，因为用户分叉出的对话也可能带它。子代理的 token 仍照常计入用量和耗电。

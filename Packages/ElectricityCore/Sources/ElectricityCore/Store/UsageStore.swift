@@ -249,6 +249,26 @@ public final class UsageStore: Sendable {
         migrator.registerMigration("v5-client") { db in
             try db.alter(table: "usage_event") { t in t.add(column: "client", .text) }
         }
+        migrator.registerMigration("v6-codex-path-free-keys") { db in
+            // Codex keys no longer contain the file path (see `CodexParser.dedupeKey`). Rows that end up with the
+            // same new key were the same record read from two paths; the extra copies are removed.
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT id, session_id, ts_utc, input_uncached, cache_write, cache_read, output, reasoning
+                FROM usage_event WHERE source = 'codex' AND dedupe_key NOT LIKE ?
+                """, arguments: [CodexParser.dedupePrefix + "%"])
+            for row in rows {
+                let ms: Int64 = row["ts_utc"]
+                let tokens = TokenCounts(inputUncached: row["input_uncached"], cacheWrite: row["cache_write"],
+                                         cacheRead: row["cache_read"], output: row["output"], reasoning: row["reasoning"])
+                let key = CodexParser.dedupeKey(sessionID: row["session_id"], timestamp: Date(timeIntervalSince1970: Double(ms) / 1000), tokens: tokens)
+                let id: Int64 = row["id"]
+                if try Int.fetchOne(db, sql: "SELECT 1 FROM usage_event WHERE dedupe_key = ?", arguments: [key]) != nil {
+                    try db.execute(sql: "DELETE FROM usage_event WHERE id = ?", arguments: [id])
+                } else {
+                    try db.execute(sql: "UPDATE usage_event SET dedupe_key = ? WHERE id = ?", arguments: [key, id])
+                }
+            }
+        }
         return migrator
     }
 

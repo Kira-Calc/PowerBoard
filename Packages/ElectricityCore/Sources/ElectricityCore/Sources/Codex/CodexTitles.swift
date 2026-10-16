@@ -5,7 +5,10 @@ import Foundation
 public enum CodexTitles {
     /// The index next to each Codex `sessions` folder.
     public static func indexURLs(sessionRoots: [URL]) -> [URL] {
-        sessionRoots.map { $0.deletingLastPathComponent().appendingPathComponent("session_index.jsonl") }
+        // `sessions` and `archived_sessions` share one index.
+        var seen = Set<URL>()
+        return sessionRoots.map { $0.deletingLastPathComponent().appendingPathComponent("session_index.jsonl") }
+            .filter { seen.insert($0.standardizedFileURL).inserted }
     }
 
     public static func read(_ data: Data) -> [String: String] {

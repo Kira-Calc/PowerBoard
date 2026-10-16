@@ -44,9 +44,13 @@ public struct LogLocations: Sendable, Hashable {
 
         var codex: [URL] = []
         if let codexHome = environment["CODEX_HOME"], !codexHome.isEmpty {
-            codex.append(URL(fileURLWithPath: (codexHome as NSString).expandingTildeInPath).appendingPathComponent("sessions"))
+            let root = URL(fileURLWithPath: (codexHome as NSString).expandingTildeInPath)
+            codex.append(root.appendingPathComponent("sessions"))
+            codex.append(root.appendingPathComponent("archived_sessions"))
         }
         codex.append(home.appendingPathComponent(".codex/sessions"))
+        // Archiving a conversation moves its log here; records read before the move are not counted twice.
+        codex.append(home.appendingPathComponent(".codex/archived_sessions"))
 
         var antigravityRoots: [URL]
         if let dataDirs = environment["ANTIGRAVITY_DATA_DIR"], !dataDirs.isEmpty {

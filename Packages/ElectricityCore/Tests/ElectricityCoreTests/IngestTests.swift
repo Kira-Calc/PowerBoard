@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import Testing
 @testable import ElectricityCore
 
@@ -49,6 +50,46 @@ import Testing
         #expect(codexEvents.map(\.model) == ["gpt-test-model", "gpt-test-mini"])
         #expect(codexEvents.allSatisfy { $0.sessionId == "codex-sess-1" && $0.projectPath == "/tmp/example/project-gamma" })
         #expect(codexEvents.map(\.tier) == ["medium", "small"])
+    }
+
+    /// Archiving a Codex conversation moves its log to `archived_sessions`: read from there, nothing is counted twice.
+    @Test func archivedCodexLogIsNotCountedTwice() async throws {
+        let env = try makeEnvironment()
+        defer { TestSupport.cleanup(env.dir) }
+        let archived = env.dir.appendingPathComponent("codex/archived_sessions", isDirectory: true)
+        try FileManager.default.createDirectory(at: archived, withIntermediateDirectories: true)
+        let service = IngestService(store: env.store, calculator: try TestSupport.calculator(), locations: LogLocations(
+            claudeCode: [], codex: [env.dir.appendingPathComponent("codex/sessions"), archived]))
+        _ = await service.scan()
+        let before = try env.store.totals(source: .codex)
+
+        try FileManager.default.moveItem(at: env.codexDir.appendingPathComponent("rollout-sample.jsonl"),
+                                         to: archived.appendingPathComponent("rollout-sample.jsonl"))
+        let summary = await service.scan()
+        #expect(summary.bySource[.codex]?.eventsInserted == 0)
+        #expect(try env.store.totals(source: .codex) == before)
+        #expect(before.eventCount == 2)
+    }
+
+    /// Migration v6 rewrites old Codex keys (with the file path) and drops copies of one record read from two paths.
+    @Test func codexKeyMigrationRemovesCopies() throws {
+        let queue = try DatabaseQueue()
+        try UsageStore.migrator.migrate(queue, upTo: "v5-client")
+        try queue.write { db in
+            for (key, path) in [("codex:old-a", "sessions"), ("codex:old-b", "archived_sessions"), ("claude:x", "")] {
+                try db.execute(sql: """
+                    INSERT INTO usage_event (dedupe_key, source, session_id, model, tier, tier_confidence, ts_utc,
+                      input_uncached, cache_write, cache_read, output, reasoning, factor_version, grid_g_per_kwh, grid_basis,
+                      energy_wh_low, energy_wh_mid, energy_wh_high, co2_g_mid, project_path)
+                    VALUES (?, ?, 's1', 'm', 'medium', 'assumed', 1791943656417, 10, 0, 90, 5, 1, 'v', 287, 'b', 1, 2, 4, 1, ?)
+                    """, arguments: [key, key.hasPrefix("codex") ? "codex" : "claude_code", path])
+            }
+        }
+        try UsageStore.migrator.migrate(queue)
+        let keys = try queue.read { db in try String.fetchAll(db, sql: "SELECT dedupe_key FROM usage_event ORDER BY id") }
+        let expected = CodexParser.dedupeKey(sessionID: "s1", timestamp: Date(timeIntervalSince1970: 1_791_943_656.417),
+                                             tokens: TokenCounts(inputUncached: 10, cacheRead: 90, output: 5, reasoning: 1))
+        #expect(keys == [expected, "claude:x"])
     }
 
     @Test func incompleteLastLineIsReadAfterItCompletes() async throws {
@@ -219,12 +260,15 @@ import Testing
             "/tmp/example-home/.claude/projects",
             "/tmp/example-home/.config/claude/projects",
         ])
-        #expect(locations.codex.map(\.path) == ["/tmp/codex/sessions", "/tmp/example-home/.codex/sessions"])
+        #expect(locations.codex.map(\.path) == [
+            "/tmp/codex/sessions", "/tmp/codex/archived_sessions",
+            "/tmp/example-home/.codex/sessions", "/tmp/example-home/.codex/archived_sessions",
+        ])
     }
 
     @Test func noEnvironment() {
         let locations = LogLocations.standard(environment: [:], home: URL(fileURLWithPath: "/tmp/h"))
         #expect(locations.claudeCode.count == 2)
-        #expect(locations.codex.map(\.path) == ["/tmp/h/.codex/sessions"])
+        #expect(locations.codex.map(\.path) == ["/tmp/h/.codex/sessions", "/tmp/h/.codex/archived_sessions"])
     }
 }

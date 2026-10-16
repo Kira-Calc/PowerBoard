@@ -88,6 +88,16 @@ public struct CodexParserState: Sendable, Hashable, Codable {
 /// so that history inherited by a forked session is not counted again. See DECISIONS.md.
 public enum CodexParser {
     static let unknownModel = "unknown"
+    static let dedupePrefix = "codex:v2:"
+
+    /// Identifies one usage record without the file path: Codex moves the log of an archived conversation from
+    /// `sessions` to `archived_sessions`, and the same record must not be counted again from the new place.
+    /// Built only from stored columns, so existing rows can be migrated (`UsageStore` migration v6).
+    static func dedupeKey(sessionID: String, timestamp: Date, tokens: TokenCounts) -> String {
+        let ms = UsageStore.milliseconds(timestamp)
+        return dedupePrefix + ParsingSupport.sha256Hex(
+            "\(sessionID)\n\(ms)\n\(tokens.inputUncached)\n\(tokens.cacheWrite)\n\(tokens.cacheRead)\n\(tokens.output)\n\(tokens.reasoning)")
+    }
 
     public static func parse(line: Data, filePath: String, lineNumber: Int, state: inout CodexParserState) -> ParseOutcome {
         guard let object = ParsingSupport.jsonObject(line) else { return .skipped(.invalidJSON) }
@@ -167,7 +177,7 @@ public enum CodexParser {
 
         let sessionID = state.sessionID ?? URL(fileURLWithPath: filePath).deletingPathExtension().lastPathComponent
         return .usage(ParsedUsage(
-            dedupeKey: "codex:" + ParsingSupport.sha256Hex("\(filePath)\n\(lineNumber)\n\(timestampString)"),
+            dedupeKey: dedupeKey(sessionID: sessionID, timestamp: timestamp, tokens: increment.tokenCounts),
             source: .codex,
             sessionID: sessionID,
             projectPath: state.cwd,

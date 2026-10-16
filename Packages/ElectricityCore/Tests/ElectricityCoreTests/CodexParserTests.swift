@@ -74,14 +74,23 @@ import Testing
         #expect(inconsistent.tokenCounts.inputUncached == 0)
     }
 
-    @Test func dedupeKeyDependsOnPathLineAndTimestamp() throws {
-        var a = CodexParserState(), b = CodexParserState(), c = CodexParserState()
+    /// The key ignores the file path and line, so a log moved to `archived_sessions` is not counted twice; it depends
+    /// on the session, the time and the tokens.
+    @Test func dedupeKeyIgnoresPathButNotSessionOrTokens() throws {
+        var a = CodexParserState(sessionID: "s1"), b = CodexParserState(sessionID: "s1"), c = CodexParserState()
+        var d = CodexParserState(sessionID: "s1")
         let line = tokenCount(last: (1, 0, 1, 0), total: (1, 0, 1, 0))
         let k1 = try #require(TestSupport.usage(of: CodexParser.parse(line: line, filePath: path, lineNumber: 7, state: &a))).dedupeKey
-        let k2 = try #require(TestSupport.usage(of: CodexParser.parse(line: line, filePath: path, lineNumber: 7, state: &b))).dedupeKey
-        let k3 = try #require(TestSupport.usage(of: CodexParser.parse(line: line, filePath: path, lineNumber: 8, state: &c))).dedupeKey
+        let moved = "/tmp/example/.codex/archived_sessions/rollout-x.jsonl"
+        let k2 = try #require(TestSupport.usage(of: CodexParser.parse(line: line, filePath: moved, lineNumber: 7, state: &b))).dedupeKey
+        c.sessionID = "other-session"
+        let k3 = try #require(TestSupport.usage(of: CodexParser.parse(line: line, filePath: path, lineNumber: 7, state: &c))).dedupeKey
+        let more = tokenCount(last: (2, 0, 1, 0), total: (2, 0, 1, 0))
+        let k4 = try #require(TestSupport.usage(of: CodexParser.parse(line: more, filePath: path, lineNumber: 7, state: &d))).dedupeKey
         #expect(k1 == k2)
         #expect(k1 != k3)
+        #expect(k1 != k4)
+        #expect(k1.hasPrefix(CodexParser.dedupePrefix))
     }
 
     @Test func unknownAndNullEventsAreIgnored() {

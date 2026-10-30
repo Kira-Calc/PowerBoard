@@ -8,7 +8,7 @@ catalog = json.loads((root / "App/Resources/Localizable.xcstrings").read_text())
 files = {p: p.read_text() for p in (root / "App/Sources").rglob("*.swift")}
 sources = "\n".join(files.values())
 # Lines that hold identifiers rather than UI text: SF Symbol names, defaults and Keychain keys, comments.
-not_ui = re.compile(r'static let \w+ = "|@AppStorage\(|forKey:|^\s*///?|systemName:')
+not_ui = re.compile(r'static let \w+ = "|@AppStorage\(|forKey:|keyPath:|^\s*///?|systemName:')
 ui_lines = "\n".join(line for name, text in files.items() if name.name != "Icons.swift"
                      for line in text.splitlines() if not not_ui.search(line))
 

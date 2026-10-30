@@ -297,32 +297,6 @@ struct Sparkline: View {
     }
 }
 
-/// A thin track with a light band sliding across it, like a page loading bar.
-/// With Reduce Motion the band stays still.
-struct ActivityBar: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
-            GeometryReader { proxy in
-                let width = proxy.size.width
-                let bandWidth = max(width * 0.4, 8)
-                // One pass every 1.2 seconds, from fully left of the track to fully right.
-                let phase = reduceMotion ? 0.5 : context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.2) / 1.2
-                let x = -bandWidth + (width + bandWidth) * phase
-                ZStack(alignment: .leading) {
-                    Capsule().fill(.primary.opacity(0.15))
-                    Capsule()
-                        .fill(LinearGradient(colors: [.primary.opacity(0), .primary, .primary.opacity(0)], startPoint: .leading, endPoint: .trailing))
-                        .frame(width: bandWidth)
-                        .offset(x: x)
-                }
-                .clipShape(Capsule())
-            }
-        }
-    }
-}
-
 /// Green check that bounces when it appears and then pulses until the alert ends.
 struct CompletionIcon: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion

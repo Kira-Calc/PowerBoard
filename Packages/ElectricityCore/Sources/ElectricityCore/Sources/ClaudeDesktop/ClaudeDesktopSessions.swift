@@ -40,3 +40,33 @@ public struct ClaudeDesktopSession: Sendable, Hashable {
                                     lastActivityAt: activity, isArchived: object["isArchived"] as? Bool ?? false)
     }
 }
+
+/// Reads the session index like `ClaudeDesktopSession.read`, but parses a file again only when its modification
+/// date changed. The active conversations list reads it every 2 seconds, and the files are large.
+public final class ClaudeDesktopSessionReader: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cache: [URL: (modified: Date?, session: ClaudeDesktopSession?)] = [:]
+
+    public init() {}
+
+    public func read(directory: URL = ClaudeDesktopSession.standardDirectory) -> [ClaudeDesktopSession] {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let enumerator = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: [.contentModificationDateKey]) else {
+            cache = [:]
+            return []
+        }
+        var next: [URL: (modified: Date?, session: ClaudeDesktopSession?)] = [:]
+        for case let url as URL in enumerator
+        where url.lastPathComponent.hasPrefix("local_") && url.pathExtension == "json" {
+            let modified = try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+            if let cached = cache[url], cached.modified == modified, modified != nil {
+                next[url] = cached
+            } else {
+                next[url] = (modified, (try? Data(contentsOf: url)).flatMap(ClaudeDesktopSession.parse))
+            }
+        }
+        cache = next
+        return next.values.compactMap(\.session)
+    }
+}

@@ -26,6 +26,31 @@ enum ProcessInspector {
         return path.contains("/\(tool)")
     }
 
+    /// Executable paths of all processes, remembered by process ID between calls so each process is looked up once.
+    /// Process IDs on macOS are not reused quickly, so a remembered path stays right while its process lives.
+    final class ExecutableCache: @unchecked Sendable {
+        private let lock = NSLock()
+        private var paths: [pid_t: String] = [:]
+
+        /// Current processes and their executable paths, in lower case (processes whose path cannot be read are
+        /// left out).
+        func snapshot() -> [pid_t: String] {
+            lock.lock()
+            defer { lock.unlock() }
+            var next: [pid_t: String] = [:]
+            for pid in ProcessInspector.allPIDs() {
+                if let path = paths[pid] ?? ProcessInspector.executablePath(pid)?.lowercased() { next[pid] = path }
+            }
+            paths = next
+            return next
+        }
+    }
+
+    /// True when a lower-case `path` from `ExecutableCache` mentions `tool`, as `runs(_:tool:)` checks.
+    static func path(_ path: String, runs tool: String) -> Bool {
+        path.contains("/\(tool)")
+    }
+
     static func allPIDs() -> [pid_t] {
         let estimate = proc_listallpids(nil, 0)
         guard estimate > 0 else { return [] }

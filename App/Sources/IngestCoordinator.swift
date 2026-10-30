@@ -7,6 +7,8 @@ import os
 @MainActor
 final class IngestCoordinator {
     private static let fallbackInterval: Duration = .seconds(60)
+    /// Shortest time between the end of one scan and the start of the next.
+    private static let minimumScanGap: Duration = .milliseconds(1500)
     private let logger = Logger(subsystem: AppIdentity.bundleID, category: "ingest")
     private let model: AppModel
     private let settings: AppSettings
@@ -76,6 +78,10 @@ final class IngestCoordinator {
                 let stats = await Task.detached { try? store.sourceStats() }.value
                 guard let self else { return }
                 self.finishScan(summary: summary, snapshot: snapshot, stats: stats ?? [:])
+                // A working agent writes its log many times a second. Changes during this pause wait in the stream
+                // (which keeps only the newest) and are handled by one scan, so the numbers still update every
+                // couple of seconds without scanning and rebuilding the snapshot on every write.
+                try? await Task.sleep(for: Self.minimumScanGap)
             }
         })
         tasks.append(Task { [continuation] in

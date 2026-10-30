@@ -32,7 +32,7 @@ struct ActiveSession: Identifiable, Hashable, Sendable {
     var chatReplied = false
 }
 
-/// Finds running agent conversations every 2 seconds and reports turns that finish.
+/// Finds running agent conversations every 2 to 4 seconds and reports turns that finish.
 ///
 /// Claude Code: `~/.claude/sessions/<pid>.json` gives the session and its busy or idle state.
 /// Claude Desktop: the Code tab's session index gives recent sessions; a log written in the last 30 seconds means
@@ -43,7 +43,10 @@ struct ActiveSession: Identifiable, Hashable, Sendable {
 /// Claude Desktop chat: the app being used, and its Stop button while it replies; see `ClaudeChatProbe`.
 @MainActor
 final class ActiveSessionMonitor {
-    private static let interval: Duration = .seconds(2)
+    /// Checks every 2 seconds while a conversation is running, so finished turns are reported quickly, and every
+    /// 4 seconds otherwise.
+    private static let busyInterval: Duration = .seconds(2)
+    private static let idleInterval: Duration = .seconds(4)
     /// At most this many conversations are listed.
     nonisolated static let maxShown = 4
     /// A finished conversation leaves the list this long after its last turn, even if its process is still open.
@@ -68,7 +71,8 @@ final class ActiveSessionMonitor {
         task = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.refresh()
-                try? await Task.sleep(for: Self.interval)
+                let busy = self?.model.activeSessions.contains { $0.status == .running } ?? false
+                try? await Task.sleep(for: busy ? Self.busyInterval : Self.idleInterval)
             }
         }
     }
@@ -82,8 +86,9 @@ final class ActiveSessionMonitor {
         let store = model.store
         let titles = self.titles
         let chat = self.chat
+        let caches = self.caches
         let claudeApp = claudeAppState()
-        let sessions = await Task.detached { Self.collect(store: store, titles: titles, chat: chat, claudeApp: claudeApp) }.value
+        let sessions = await Task.detached { Self.collect(store: store, titles: titles, chat: chat, claudeApp: claudeApp, caches: caches) }.value
         let finished = sessions.filter { previous[$0.sessionID] == .running && $0.status == .done }
         previous = Dictionary(uniqueKeysWithValues: sessions.map { ($0.sessionID, $0.status) })
         // Completion alerts above use every session; the list shows only the recent ones.
@@ -128,11 +133,19 @@ final class ActiveSessionMonitor {
     }
 
     private let titles = TitleCache()
+    private let caches = Caches()
+
+    /// What `collect` keeps between runs so that each run only reads what changed.
+    final class Caches: Sendable {
+        let executables = ProcessInspector.ExecutableCache()
+        let claudeDesktop = ClaudeDesktopSessionReader()
+    }
 
     /// Runs off the main thread: reads session files, scans processes and queries energy.
     nonisolated static func collect(store: UsageStore?, titles: TitleCache, chat: ClaudeChatProbe? = nil,
-                                    claudeApp: ClaudeChatProbe.AppState? = nil) -> [ActiveSession] {
+                                    claudeApp: ClaudeChatProbe.AppState? = nil, caches: Caches = Caches()) -> [ActiveSession] {
         var sessions: [ActiveSession] = []
+        let processes = caches.executables.snapshot()
 
         for live in LiveClaudeSession.read(directory: LiveClaudeSession.standardDirectory)
         where ProcessInspector.isAlive(live.pid) && ProcessInspector.runs(live.pid, tool: "claude") {
@@ -158,7 +171,7 @@ final class ActiveSessionMonitor {
         // Claude desktop app, Code tab: sessions active in the last 30 minutes.
         let now = Date()
         let known = Set(sessions.map(\.sessionID))
-        for desktop in ClaudeDesktopSession.read() where !desktop.isArchived && !known.contains(desktop.sessionID) {
+        for desktop in caches.claudeDesktop.read() where !desktop.isArchived && !known.contains(desktop.sessionID) {
             let logDate = Self.claudeLogDate(sessionID: desktop.sessionID)
             let last = [desktop.lastActivityAt, logDate].compactMap { $0 }.max()
             guard let last, now.timeIntervalSince(last) < 30 * 60 else { continue }
@@ -173,8 +186,8 @@ final class ActiveSessionMonitor {
            !activities.isEmpty {
             // Map open log files to the codex process that holds them.
             var owner: [String: pid_t] = [:]
-            for pid in ProcessInspector.allPIDs() {
-                guard ProcessInspector.runs(pid, tool: "codex") else { continue }
+            for (pid, path) in processes {
+                guard ProcessInspector.path(path, runs: "codex") else { continue }
                 for path in ProcessInspector.openFiles(pid) where path.hasSuffix(".jsonl") {
                     owner[URL(fileURLWithPath: path).resolvingSymlinksInPath().path] = pid
                 }
@@ -227,7 +240,7 @@ final class ActiveSessionMonitor {
         }
 
         // Antigravity CLI (`agy`): a running process and the conversation database it has open.
-        for pid in ProcessInspector.allPIDs() where ProcessInspector.runs(pid, tool: "agy") {
+        for (pid, path) in processes where ProcessInspector.path(path, runs: "agy") {
             for path in ProcessInspector.openFiles(pid) where path.contains("/conversations/") && path.hasSuffix(".db") {
                 let url = URL(fileURLWithPath: path)
                 let sessionID = url.deletingPathExtension().lastPathComponent
